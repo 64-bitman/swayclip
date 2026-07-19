@@ -20,9 +20,9 @@
 #include "common/log.h"
 #include "common/version.h"
 #include "config.h"
+#include "database.h"
 #include "wayland.h"
 #include <getopt.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -35,7 +35,8 @@ struct state
 
     struct config config;
 
-    struct wayland wayland;
+    struct wayland  wayland;
+    struct database db;
 };
 
 static bool
@@ -104,6 +105,7 @@ main(int argc, char **argv)
     static const struct option options[] = {
         {"logfile", required_argument, 0, 'l'},
         {"config", required_argument, 0, 'c'},
+        {"db", required_argument, 0, 's'},
         {"debug", no_argument, 0, 'd'},
         {"version", no_argument, 0, 'v'},
         {NULL, 0, 0, 0}
@@ -113,8 +115,9 @@ main(int argc, char **argv)
     int   idx;
     bool  init_log = false;
     char *config = NULL;
+    char *db = NULL;
 
-    while ((c = getopt_long(argc, argv, "l:c:dv", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "l:c:s:dv", options, &idx)) != -1)
     {
         switch (c)
         {
@@ -125,6 +128,9 @@ main(int argc, char **argv)
         case 'c':
             config = strdup(optarg);
             break;
+        case 's':
+            db = strdup(optarg);
+            break;
         case 'd':
             log_set_level(LOG_DEBUG);
             break;
@@ -132,6 +138,8 @@ main(int argc, char **argv)
             printf("%s\n", PROJECT_VERSION);
             break;
         default:
+            free(config);
+            free(db);
             return EXIT_FAILURE;
         }
     }
@@ -150,6 +158,7 @@ main(int argc, char **argv)
     {
         log_errerror("Error setting signal mask");
         free(config);
+        free(db);
         return EXIT_FAILURE;
     }
 
@@ -164,6 +173,7 @@ main(int argc, char **argv)
     if (!eventloop_init(&state.loop))
     {
         config_uninit(&state.config);
+        free(db);
         return EXIT_FAILURE;
     }
 
@@ -173,8 +183,18 @@ main(int argc, char **argv)
         .set = {.callback = wsignal_set, .callback_udata = &state}
     };
 
+    ret = database_init(&state.db, db, &state.config);
+    free(db);
+    if (!ret)
+    {
+        config_uninit(&state.config);
+        eventloop_uninit(&state.loop);
+        return EXIT_FAILURE;
+    }
+
     if (!wayland_init(&state.wayland, wsignals, &state.loop, &state.config))
     {
+        database_uninit(&state.db);
         config_uninit(&state.config);
         eventloop_uninit(&state.loop);
         return EXIT_FAILURE;
@@ -205,6 +225,7 @@ exit:
     }
 
     wayland_uninit(&state.wayland);
+    database_uninit(&state.db);
     config_uninit(&state.config);
     eventloop_uninit(&state.loop);
 

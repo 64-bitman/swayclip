@@ -3,6 +3,7 @@ swayclip = executable(
   'main.c',
   'wayland.c',
   'config.c',
+  'database.c',
   version_h,
   include_directories: [includes, include_directories('.')],
   dependencies: [wl_dep, json_dep, sqlite_dep],
