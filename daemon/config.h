@@ -60,11 +60,6 @@ struct config
     // Array of regex_t of mime types that will make the selection event be
     // completely ignored.
     struct sc_array_regex blocked_mime_types;
-
-    // Array of regex_t of mime types that will create an entry, but not store
-    // it in the database. This means it will still be persisted across
-    // clipboard clears.
-    struct sc_array_regex transient_mime_types;
 };
 
 // clang-format off

@@ -137,7 +137,6 @@ config_init(struct config *config, const char *file)
     sc_array_init(&config->configured_seats);
     sc_array_init(&config->allowed_mime_types);
     sc_array_init(&config->blocked_mime_types);
-    sc_array_init(&config->transient_mime_types);
 
     const struct config_option opts[] = {
         CONFIG_INT64("daemon.max_entries", &config->max_entries),
@@ -154,11 +153,6 @@ config_init(struct config *config, const char *file)
         CONFIG_ARRAY(
             "daemon.mime_types.blocked",
             &config->blocked_mime_types,
-            extract_pattern_array
-        ),
-        CONFIG_ARRAY(
-            "daemon.mime_types.transient",
-            &config->transient_mime_types,
             extract_pattern_array
         )
     };
@@ -192,7 +186,4 @@ config_uninit(struct config *config)
 
     sc_array_foreach_ptr(&config->blocked_mime_types, regex) regfree(regex);
     sc_array_term(&config->blocked_mime_types);
-
-    sc_array_foreach_ptr(&config->transient_mime_types, regex) regfree(regex);
-    sc_array_term(&config->transient_mime_types);
 }

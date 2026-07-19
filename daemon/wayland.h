@@ -32,14 +32,6 @@ enum wayland_selection_type
     WAYLAND_SELECTION_PRIMARY
 };
 
-enum wayland_attribute
-{
-    WAYLAND_ATTRIBUTE_NONE = 0,
-    WAYLAND_ATTRIBUTE_BLOCKED,   // Selection event is blocked in config
-    WAYLAND_ATTRIBUTE_TRANSIENT, // Selection event is marked as transient in
-                                 // config.
-};
-
 struct wayland;
 
 struct wayland_signals

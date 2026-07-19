@@ -52,8 +52,8 @@ struct seat
     struct selection sel_regular;
     struct selection sel_primary;
 
-    struct sc_array_astr   mime_types;
-    enum wayland_attribute attr;
+    struct sc_array_astr mime_types;
+    bool                 blocked;
 
     struct sc_list link;
 };
@@ -151,19 +151,15 @@ data_offer_event_offer(
     // Do not save entry if mime type is configured to be blocked.
     if (sc_array_size(&config->blocked_mime_types) > 0 &&
         match_regex_array(&config->blocked_mime_types, mime_type))
-        seat->attr = WAYLAND_ATTRIBUTE_BLOCKED;
+        seat->blocked = true;
 
-    if (seat->attr == WAYLAND_ATTRIBUTE_BLOCKED)
+    if (seat->blocked)
         return;
 
     // Check if mime type is allowed to be saved
     if (sc_array_size(&config->allowed_mime_types) > 0 &&
         !match_regex_array(&config->allowed_mime_types, mime_type))
         return;
-
-    if (sc_array_size(&config->transient_mime_types) > 0 &&
-        match_regex_array(&config->transient_mime_types, mime_type))
-        seat->attr = WAYLAND_ATTRIBUTE_TRANSIENT;
 
     char *str = strdup(mime_type);
 
@@ -194,7 +190,6 @@ data_device_event_data_offer(
     struct seat *seat = udata;
 
     seat_clear_mime_types(seat);
-    seat->attr = WAYLAND_ATTRIBUTE_NONE;
 
     ext_data_control_offer_v1_add_listener(
         offer_proxy, &data_offer_listener, seat
@@ -247,7 +242,7 @@ selection_event(
     if (sel->ext_data_offer != NULL)
         ext_data_control_offer_v1_destroy(sel->ext_data_offer);
 
-    if (sel->ext_data_source != NULL || seat->attr == WAYLAND_ATTRIBUTE_BLOCKED)
+    if (sel->ext_data_source != NULL || seat->blocked)
     {
         // Currently source client or blocked, ignore
         if (offer != NULL)
@@ -276,17 +271,20 @@ selection_event(
         if (timerfd_settime(fd, 0, &spec, NULL) == -1)
         {
             log_errerror("Error setting timer fd for null check");
+            close(fd);
             return;
         }
 
-        (void)eventloop_add(
-            seat->wayland->wct.loop,
-            fd,
-            EVENT_PRIORITY_NORMAL,
-            EPOLLIN,
-            null_timer_callback,
-            sel
-        );
+        if (!eventloop_add(
+                seat->wayland->wct.loop,
+                fd,
+                EVENT_PRIORITY_NORMAL,
+                EPOLLIN,
+                null_timer_callback,
+                sel
+            ))
+            close(fd);
+        return;
     }
 
     struct wayland_signals *signals = &seat->wayland->signals;
