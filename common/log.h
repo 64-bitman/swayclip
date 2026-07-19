@@ -21,6 +21,7 @@
 #include "util.h"
 #include <errno.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <string.h> // IWYU pragma: keep
 
 enum log_level

@@ -12,7 +12,9 @@ swayclip = executable(
     util_lib,
     wayland_ct_lib,
     toml_lib,
-    bytes_lib
+    bytes_lib,
+    xdg_lib,
+    config_util_lib
   ],
   install: true
 )

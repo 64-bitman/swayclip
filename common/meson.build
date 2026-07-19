@@ -44,5 +44,21 @@ bytes_lib = static_library(
   include_directories: include_directories('.'),
 )
 
+xdg_lib = static_library(
+  'xdg',
+  'xdg.c',
+  'xdg.h',
+  include_directories: include_directories('.'),
+  link_with: [util_lib, log_lib]
+)
+
+config_util_lib = static_library(
+  'config_util',
+  'config_util.c',
+  'config_util.h',
+  include_directories: include_directories('.'),
+  link_with: [util_lib, log_lib, xdg_lib]
+)
+
 subdir('sc')
 subdir('tomlc17')
