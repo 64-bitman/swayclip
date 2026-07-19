@@ -1,3 +1,7 @@
+subdir('sc')
+subdir('tomlc17')
+subdir('sha256')
+
 version_h = vcs_tag(
   input: 'version.h.in',
   output: 'version.h',
@@ -25,7 +29,7 @@ event_lib = static_library(
   'event.c',
   'event.h',
   include_directories: include_directories('.'),
-  link_with: [util_lib, log_lib]
+  link_with: [util_lib, log_lib, sc_lib]
 )
 
 wayland_ct_lib = static_library(
@@ -33,7 +37,7 @@ wayland_ct_lib = static_library(
   'wayland_ct.c',
   'wayland_ct.h',
   include_directories: include_directories('.'),
-  link_with: [util_lib, log_lib, event_lib]
+  link_with: [util_lib, log_lib, event_lib, sc_lib]
 )
 
 xdg_lib = static_library(
@@ -51,7 +55,3 @@ config_util_lib = static_library(
   include_directories: include_directories('.'),
   link_with: [util_lib, log_lib, xdg_lib]
 )
-
-subdir('sc')
-subdir('tomlc17')
-subdir('sha256')

@@ -32,8 +32,12 @@ wl_dep = dependency('wayland-client')
 json_dep = dependency('json-c')
 sqlite_dep = dependency('sqlite3')
 
+unity_proj = subproject('unity')
+unity_dep = unity_proj.get_variable('unity_dep')
+
 includes = include_directories('.')
 
 subdir('protocol')
 subdir('common')
 subdir('daemon')
+subdir('test')
