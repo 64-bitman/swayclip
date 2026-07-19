@@ -19,6 +19,7 @@
 #include "common/event.h"
 #include "common/log.h"
 #include "common/version.h"
+#include "config.h"
 #include "wayland.h"
 #include <getopt.h>
 #include <pthread.h>
@@ -31,6 +32,10 @@
 struct state
 {
     struct eventloop loop;
+
+    struct config config;
+
+    struct wayland wayland;
 };
 
 static bool
@@ -62,22 +67,27 @@ main(int argc, char **argv)
 {
     static const struct option options[] = {
         {"logfile", required_argument, 0, 'l'},
+        {"config", required_argument, 0, 'c'},
         {"debug", no_argument, 0, 'd'},
         {"version", no_argument, 0, 'v'},
         {NULL, 0, 0, 0}
     };
 
-    int  c;
-    int  idx;
-    bool init_log = false;
+    int   c;
+    int   idx;
+    bool  init_log = false;
+    char *config = NULL;
 
-    while ((c = getopt_long(argc, argv, "l:d", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "l:c:dv", options, &idx)) != -1)
     {
         switch (c)
         {
         case 'l':
             log_init(optarg);
             init_log = true;
+            break;
+        case 'c':
+            config = strdup(optarg);
             break;
         case 'd':
             log_set_level(LOG_DEBUG);
@@ -103,14 +113,30 @@ main(int argc, char **argv)
     if (pthread_sigmask(SIG_BLOCK, &block, NULL) == -1)
     {
         log_errerror("Error setting signal mask");
+        free(config);
         return EXIT_FAILURE;
     }
 
     struct state state;
     bool         ret = false;
 
-    if (!eventloop_init(&state.loop))
+    ret = config_init(&state.config, config);
+    free(config);
+    if (!ret)
         return EXIT_FAILURE;
+
+    if (!eventloop_init(&state.loop))
+    {
+        config_uninit(&state.config);
+        return EXIT_FAILURE;
+    }
+
+    if (!wayland_init(&state.wayland, &state.loop, &state.config))
+    {
+        config_uninit(&state.config);
+        eventloop_uninit(&state.loop);
+        return EXIT_FAILURE;
+    }
 
     int sig_fd = signalfd(-1, &block, SFD_NONBLOCK | SFD_CLOEXEC);
 
@@ -136,6 +162,8 @@ exit:
         close(sig_fd);
     }
 
+    wayland_uninit(&state.wayland);
+    config_uninit(&state.config);
     eventloop_uninit(&state.loop);
 
     return ret ? EXIT_SUCCESS : EXIT_FAILURE;

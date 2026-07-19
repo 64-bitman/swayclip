@@ -2,6 +2,7 @@ swayclip = executable(
   'swayclip',
   'main.c',
   'wayland.c',
+  'config.c',
   version_h,
   include_directories: [includes, include_directories('.')],
   dependencies: [wl_dep, json_dep, sqlite_dep],
@@ -14,7 +15,8 @@ swayclip = executable(
     toml_lib,
     bytes_lib,
     xdg_lib,
-    config_util_lib
+    config_util_lib,
+    daemon_proto_lib
   ],
   install: true
 )

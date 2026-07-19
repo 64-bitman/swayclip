@@ -78,7 +78,7 @@ void sc_list_add_tail(struct sc_list *l, struct sc_list *elem)
 {
 	struct sc_list *prev;
 
-    assert(!sc_list_is_empty(elem));
+    assert(sc_list_is_empty(elem));
 
 	prev = l->prev;
 	l->prev = elem;
@@ -104,7 +104,7 @@ void sc_list_add_head(struct sc_list *l, struct sc_list *elem)
 {
 	struct sc_list *next;
 
-    assert(!sc_list_is_empty(l));
+    assert(sc_list_is_empty(elem));
 
 	next = l->next;
 	l->next = elem;
@@ -131,7 +131,7 @@ void sc_list_add_after(struct sc_list *prev,
 {
 	struct sc_list *next;
 
-    assert(!sc_list_is_empty(elem));
+    assert(sc_list_is_empty(elem));
 
 	next = prev->next;
 	prev->next = elem;
@@ -145,7 +145,7 @@ void sc_list_add_before(struct sc_list *next, struct sc_list *elem)
 	struct sc_list *prev;
 
 	// Delete if exists to prevent adding same item twice
-    assert(!sc_list_is_empty(elem));
+    assert(sc_list_is_empty(elem));
 
 	prev = next->prev;
 	next->prev = elem;

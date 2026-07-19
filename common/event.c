@@ -77,6 +77,7 @@ eventloop_init(struct eventloop *loop)
     pthread_mutex_init(&loop->stop_mut, NULL);
 
     sc_list_init(&loop->sources);
+    sc_list_init(&loop->prepares);
     return true;
 }
 

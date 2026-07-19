@@ -18,20 +18,22 @@
 
 #pragma once
 
-#include <stddef.h>
+#include "event.h"
+#include <stdbool.h>
+#include <wayland-client.h>
 
-/*
- * Reference counted container for a block of memory
- */
-struct bytes
+struct wayland_ct
 {
-    int    refcount;
-    void  *data;
-    size_t sz;
+    struct wl_display  *display;
+    struct wl_registry *registry;
+
+    int fd;
+    int prepare_id;
+
+    struct eventloop *loop;
 };
 
 // clang-format off
-struct bytes *bytes_new(void *data, size_t sz);
-struct bytes *bytes_ref(struct bytes *bytes);
-void bytes_unref(struct bytes *bytes);
+bool wayland_ct_init(struct wayland_ct *wct, struct eventloop *loop);
+void wayland_ct_uninit(struct wayland_ct *wct);
 // clang-format on
