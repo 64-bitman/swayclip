@@ -32,6 +32,47 @@ enum wayland_selection_type
     WAYLAND_SELECTION_PRIMARY
 };
 
+enum wayland_attribute
+{
+    WAYLAND_ATTRIBUTE_NONE = 0,
+    WAYLAND_ATTRIBUTE_BLOCKED,   // Selection event is blocked in config
+    WAYLAND_ATTRIBUTE_TRANSIENT, // Selection event is marked as transient in
+                                 // config.
+};
+
+struct wayland;
+
+struct wayland_signals
+{
+    // If "offer" is NULL, selection is cleared.
+    struct
+    {
+        // clang-format off
+        void (*callback)(struct ext_data_control_offer_v1 *offer, const struct sc_array_astr *mime_types, void *udata);
+        // clang-format on
+        void *callback_udata;
+    } selection;
+
+    struct
+    {
+        // clang-format off
+        void (*callback)(const char *mime_type, int fd, void *udata);
+        // clang-format on
+        void *callback_udata;
+    } send;
+
+    // Should return a source with all mime types added. Do not add a
+    // listener to it. May return NULL to indicate nothing should be done,
+    // unless "clear" is set to true, then clear thes election.
+    struct
+    {
+        // clang-format off
+        struct ext_data_control_source_v1 *(*callback)(struct ext_data_control_device_v1 *data_device, bool *clear, void *udata);
+        // clang-format on
+        void *callback_udata;
+    } set;
+};
+
 struct wayland
 {
     struct wayland_ct wct;
@@ -40,26 +81,11 @@ struct wayland
     struct ext_data_control_manager_v1 *ext_data_mgr;
     struct sc_list                      seats;
 
-    struct
-    {
-        // clang-format off
-        // If "offer" is NULL, selection is cleared.
-        void (*callback)(struct wayland *wayland, struct ext_data_control_offer_v1 *offer, const struct sc_array_astr *mime_types);
-        // clang-format on
-        void *callback_udata;
-    } signal_selection;
-
-    struct
-    {
-        // clang-format off
-        void (*callback)(struct wayland *wayland, const char *mime_type, int fd);
-        // clang-format on
-        void *callback_udata;
-    } signal_send;
+    struct wayland_signals signals;
 };
 
 // clang-format off
-bool wayland_init(struct wayland *wayland, struct eventloop *loop, struct config *config);
+bool wayland_init(struct wayland *wayland, struct wayland_signals signals, struct eventloop *loop, struct config *config);
 void wayland_uninit(struct wayland *wayland);
 void wayland_event_noop();
 // clang-format on

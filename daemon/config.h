@@ -45,8 +45,12 @@ struct config
     // Enable persistent history
     bool persist;
 
-    // Array of seats that the user has configured. If empty, then use all
-    // seats.
+    // Default values for any seat
+    bool regular;
+    bool primary;
+
+    // Array of seats that the user has configured. If empty then allow any
+    // seat.
     struct sc_array_config_seat configured_seats;
 
     // Array of regex_t of mime types that are allowed to be saved. If empty,

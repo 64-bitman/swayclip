@@ -62,6 +62,42 @@ signal_callback(int fd, int events UNUSED, void *udata)
     return false;
 }
 
+static void
+wsignal_selection(
+    struct ext_data_control_offer_v1 *offer,
+    const struct sc_array_astr       *mime_types,
+    void                             *udata
+)
+{
+    struct state *state = udata;
+
+    (void)offer;
+    (void)mime_types;
+    (void)state;
+}
+
+static void
+wsignal_send(const char *mime_type, int fd, void *udata)
+{
+    struct state *state = udata;
+
+    (void)mime_type;
+    (void)fd;
+    (void)state;
+}
+
+static struct ext_data_control_source_v1 *
+wsignal_set(struct ext_data_control_device_v1 *device, bool *clear, void *udata)
+{
+    struct state *state = udata;
+
+    (void)device;
+    (void)clear;
+    (void)state;
+
+    return NULL;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -131,7 +167,13 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    if (!wayland_init(&state.wayland, &state.loop, &state.config))
+    struct wayland_signals wsignals = {
+        .selection = {.callback = wsignal_selection, .callback_udata = &state},
+        .send = {.callback = wsignal_send, .callback_udata = &state},
+        .set = {.callback = wsignal_set, .callback_udata = &state}
+    };
+
+    if (!wayland_init(&state.wayland, wsignals, &state.loop, &state.config))
     {
         config_uninit(&state.config);
         eventloop_uninit(&state.loop);

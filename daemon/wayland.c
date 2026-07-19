@@ -19,6 +19,7 @@
 #include "wayland.h"
 #include "common/log.h"
 #include <string.h>
+#include <sys/timerfd.h>
 #include <unistd.h>
 
 struct seat;
@@ -51,14 +52,22 @@ struct seat
     struct selection sel_regular;
     struct selection sel_primary;
 
-    struct sc_array_astr mime_types;
+    struct sc_array_astr   mime_types;
+    enum wayland_attribute attr;
 
     struct sc_list link;
 };
 
+static void wayland_del_seat(struct seat *seat);
+
 static void
 selection_init(struct selection *sel, struct seat *seat)
 {
+    if (sel == &seat->sel_regular)
+        sel->type = WAYLAND_SELECTION_REGULAR;
+    else
+        sel->type = WAYLAND_SELECTION_PRIMARY;
+
     sel->seat = seat;
     sel->null_timerfd = -1;
 }
@@ -78,19 +87,273 @@ selection_uninit(struct selection *sel)
     }
 }
 
-static const struct ext_data_control_device_v1_listener data_device_listener = {
-    .data_offer = wayland_event_noop,
-    .selection = wayland_event_noop,
-    .primary_selection = wayland_event_noop,
-    .finished = wayland_event_noop
-};
+static void
+selection_set(struct selection *sel)
+{
+    struct wayland *wayland = sel->seat->wayland;
+    bool            clear = false;
+
+    log_debug(
+        "Setting selection %d for seat \"%s\"", sel->type, sel->seat->name
+    );
+
+    struct ext_data_control_source_v1 *source = wayland->signals.set.callback(
+        sel->seat->ext_data_device, &clear, wayland->signals.set.callback_udata
+    );
+
+    if (!clear && source == NULL)
+        return;
+
+    if (sel->ext_data_source != NULL)
+        ext_data_control_source_v1_destroy(sel->ext_data_source);
+    sel->ext_data_source = source;
+
+    switch (sel->type)
+    {
+    case WAYLAND_SELECTION_REGULAR:
+        ext_data_control_device_v1_set_selection(
+            sel->seat->ext_data_device, source
+        );
+        break;
+    case WAYLAND_SELECTION_PRIMARY:
+        ext_data_control_device_v1_set_primary_selection(
+            sel->seat->ext_data_device, source
+        );
+        break;
+    }
+}
 
 /*
- * Start listening to events from the seat.
+ * Check if "target" matches any of the regexes in arr.
+ */
+bool
+match_regex_array(struct sc_array_regex *arr, const char *target)
+{
+    regex_t *reg;
+    sc_array_foreach_ptr(arr, reg)
+    {
+        if (regexec(reg, target, 0, NULL, 0) == 0)
+            return true;
+    }
+    return false;
+}
+
+static void
+data_offer_event_offer(
+    void                                   *udata,
+    struct ext_data_control_offer_v1 *proxy UNUSED,
+    const char                             *mime_type
+)
+{
+    struct seat   *seat = udata;
+    struct config *config = seat->wayland->config;
+
+    // Do not save entry if mime type is configured to be blocked.
+    if (sc_array_size(&config->blocked_mime_types) > 0 &&
+        match_regex_array(&config->blocked_mime_types, mime_type))
+        seat->attr = WAYLAND_ATTRIBUTE_BLOCKED;
+
+    if (seat->attr == WAYLAND_ATTRIBUTE_BLOCKED)
+        return;
+
+    // Check if mime type is allowed to be saved
+    if (sc_array_size(&config->allowed_mime_types) > 0 &&
+        !match_regex_array(&config->allowed_mime_types, mime_type))
+        return;
+
+    if (sc_array_size(&config->transient_mime_types) > 0 &&
+        match_regex_array(&config->transient_mime_types, mime_type))
+        seat->attr = WAYLAND_ATTRIBUTE_TRANSIENT;
+
+    char *str = strdup(mime_type);
+
+    if (str == NULL)
+        return;
+    sc_array_add(&seat->mime_types, str);
+}
+
+static const struct ext_data_control_offer_v1_listener data_offer_listener = {
+    .offer = data_offer_event_offer
+};
+
+static void
+seat_clear_mime_types(struct seat *seat)
+{
+    char *mime_type;
+    sc_array_foreach(&seat->mime_types, mime_type) free(mime_type);
+    sc_array_term(&seat->mime_types);
+}
+
+static void
+data_device_event_data_offer(
+    void                                    *udata,
+    struct ext_data_control_device_v1 *proxy UNUSED,
+    struct ext_data_control_offer_v1        *offer_proxy
+)
+{
+    struct seat *seat = udata;
+
+    seat_clear_mime_types(seat);
+    seat->attr = WAYLAND_ATTRIBUTE_NONE;
+
+    ext_data_control_offer_v1_add_listener(
+        offer_proxy, &data_offer_listener, seat
+    );
+}
+
+static bool
+null_timer_callback(int fd, int events, void *udata)
+{
+    if (events & (EPOLLHUP | EPOLLERR))
+    {
+        log_errwarn("Error polling timer fd for null check");
+        return true;
+    }
+    if (!(events & EPOLLIN))
+        return false;
+
+    uint64_t exp;
+    ssize_t  r = read(fd, &exp, sizeof(exp));
+
+    if (r == -1)
+    {
+        log_errwarn("Error reading timer fd for null check");
+        return true;
+    }
+
+    struct selection *sel = udata;
+
+    if (sel->ext_data_offer == NULL)
+        // NULL selection event is valid, become the source client
+        selection_set(sel);
+
+    return true;
+}
+
+static void
+selection_event(
+    struct seat                      *seat,
+    struct ext_data_control_offer_v1 *offer,
+    struct selection                 *sel
+)
+{
+    if (!sel->enabled)
+    {
+        if (offer != NULL)
+            ext_data_control_offer_v1_destroy(offer);
+        return;
+    }
+
+    if (sel->ext_data_offer != NULL)
+        ext_data_control_offer_v1_destroy(sel->ext_data_offer);
+
+    if (sel->ext_data_source != NULL || seat->attr == WAYLAND_ATTRIBUTE_BLOCKED)
+    {
+        // Currently source client or blocked, ignore
+        if (offer != NULL)
+            ext_data_control_offer_v1_destroy(offer);
+        sel->ext_data_offer = NULL;
+        return;
+    }
+
+    sel->ext_data_offer = offer;
+
+    if (offer == NULL)
+    {
+        int fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
+
+        if (fd == -1)
+        {
+            log_errerror("Error creating timer fd for null check");
+            return;
+        }
+
+        struct itimerspec spec = {0};
+
+        // Set delay to 1 ms
+        spec.it_value.tv_nsec = 1000000;
+
+        if (timerfd_settime(fd, 0, &spec, NULL) == -1)
+        {
+            log_errerror("Error setting timer fd for null check");
+            return;
+        }
+
+        (void)eventloop_add(
+            seat->wayland->wct.loop,
+            fd,
+            EVENT_PRIORITY_NORMAL,
+            EPOLLIN,
+            null_timer_callback,
+            sel
+        );
+    }
+
+    struct wayland_signals *signals = &seat->wayland->signals;
+
+    signals->selection.callback(
+        offer, &seat->mime_types, signals->selection.callback_udata
+    );
+    seat_clear_mime_types(seat);
+}
+
+static void
+data_device_event_selection(
+    void                                    *udata,
+    struct ext_data_control_device_v1 *proxy UNUSED,
+    struct ext_data_control_offer_v1        *offer_proxy
+)
+{
+    struct seat *seat = udata;
+    selection_event(seat, offer_proxy, &seat->sel_regular);
+}
+
+static void
+data_device_event_primary_selection(
+    void                                    *udata,
+    struct ext_data_control_device_v1 *proxy UNUSED,
+    struct ext_data_control_offer_v1        *offer_proxy
+)
+{
+    struct seat *seat = udata;
+    selection_event(seat, offer_proxy, &seat->sel_primary);
+}
+
+static void
+data_device_event_finished(
+    void *udata, struct ext_data_control_device_v1 *proxy UNUSED
+)
+{
+    struct seat *seat = udata;
+
+    log_debug("Seat data device finished, removing seat...");
+    wayland_del_seat(seat);
+}
+
+static const struct ext_data_control_device_v1_listener data_device_listener = {
+    .data_offer = data_device_event_data_offer,
+    .selection = data_device_event_selection,
+    .primary_selection = data_device_event_primary_selection,
+    .finished = data_device_event_finished
+};
+
+static void
+seat_set(struct seat *seat)
+{
+    if (seat->sel_regular.enabled)
+        selection_set(&seat->sel_regular);
+    if (seat->sel_primary.enabled)
+        selection_set(&seat->sel_primary);
+}
+
+/*
+ * Start listening to events from the seat, which should have a name.
  */
 static void
 wayland_seat_start(struct seat *seat)
 {
+    log_debug("Starting seat \"%s\"", seat->name);
+
     seat->ext_data_device = ext_data_control_manager_v1_get_data_device(
         seat->wayland->ext_data_mgr, seat->proxy
     );
@@ -100,24 +363,34 @@ wayland_seat_start(struct seat *seat)
 
     seat->enabled = true;
 
-    // If seat has an entry set for it, then become the source client. TODO
-    if (false)
-    {
-    }
+    // Try setting each enabled selection in case an entry is already set.
+    seat_set(seat);
 }
 
 static bool
-wayland_seat_is_configured(struct wayland *wayland, const char *name)
+wayland_seat_is_configured(
+    struct wayland *wayland, const char *name, bool *regular, bool *primary
+)
 {
     struct config      *config = wayland->config;
     struct config_seat *config_seat;
 
+    if (sc_array_size(&config->configured_seats) == 0)
+    {
+        *regular = config->regular;
+        *primary = config->primary;
+        return true;
+    }
+
     sc_array_foreach_ptr(&config->configured_seats, config_seat)
     {
-        if (strcmp(config_seat->name, name) != 0)
-            continue;
-        if (config_seat->regular || config_seat->primary)
-            return true;
+        if (config_seat->name == NULL || strcmp(config_seat->name, name) == 0)
+        {
+            *regular = config_seat->regular;
+            *primary = config_seat->primary;
+            if (config_seat->regular || config_seat->primary)
+                return true;
+        }
     }
     return false;
 }
@@ -144,7 +417,12 @@ seat_event_name(void *udata, struct wl_seat *proxy UNUSED, const char *name)
         return;
     }
 
-    if (wayland_seat_is_configured(seat->wayland, name))
+    if (wayland_seat_is_configured(
+            seat->wayland,
+            name,
+            &seat->sel_regular.enabled,
+            &seat->sel_primary.enabled
+        ))
         wayland_seat_start(seat);
 }
 
@@ -175,6 +453,8 @@ wayland_add_seat(
 
     wl_seat_add_listener(proxy, &seat_listener, seat);
 
+    sc_array_init(&seat->mime_types);
+
     sc_list_init(&seat->link);
     sc_list_add_head(&wayland->seats, &seat->link);
 
@@ -192,6 +472,8 @@ wayland_del_seat(struct seat *seat)
 
     if (seat->ext_data_device != NULL)
         ext_data_control_device_v1_destroy(seat->ext_data_device);
+
+    seat_clear_mime_types(seat);
 
     sc_list_del(&seat->link);
     free(seat);
@@ -213,9 +495,6 @@ registry_event_global(
         wayland->ext_data_mgr = wl_registry_bind(
             proxy, name, &ext_data_control_manager_v1_interface, 1
         );
-
-        // We may have binded to seats (and got seat name event) before the data
-        // manager global. TODO
     }
     else if (strcmp(interface, wl_seat_interface.name) == 0)
     {
@@ -264,7 +543,10 @@ static const struct wl_registry_listener registry_listener = {
 
 bool
 wayland_init(
-    struct wayland *wayland, struct eventloop *loop, struct config *config
+    struct wayland        *wayland,
+    struct wayland_signals signals,
+    struct eventloop      *loop,
+    struct config         *config
 )
 {
     if (!wayland_ct_init(&wayland->wct, loop))
@@ -285,6 +567,8 @@ wayland_init(
         wayland_uninit(wayland);
         return false;
     }
+
+    wayland->signals = signals;
 
     return true;
 }

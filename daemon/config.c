@@ -24,7 +24,11 @@
 static bool
 extract_configured_seats(const char *key, toml_datum_t dat, void *store)
 {
-    struct sc_array_config_seat *arr = store;
+    struct config               *config = store;
+    struct sc_array_config_seat *arr = &config->configured_seats;
+
+    if (dat.u.tab.size == 0)
+        return true;
 
     sc_array_set_capacity(arr, dat.u.tab.size);
     if (sc_array_oom(arr))
@@ -45,7 +49,7 @@ extract_configured_seats(const char *key, toml_datum_t dat, void *store)
         }
 
         struct config_seat seat = {
-            .name = NULL, .regular = true, .primary = true
+            .name = NULL, .regular = config->regular, .primary = config->primary
         };
 
         seat.name = strdup(seatname);
@@ -73,6 +77,9 @@ static bool
 extract_pattern_array(const char *key, toml_datum_t dat, void *store)
 {
     struct sc_array_regex *arr = store;
+
+    if (dat.u.arr.size == 0)
+        return true;
 
     sc_array_set_capacity(arr, dat.u.arr.size);
     if (sc_array_oom(arr))
@@ -136,9 +143,9 @@ config_init(struct config *config, const char *file)
         CONFIG_INT64("daemon.max_entries", &config->max_entries),
         CONFIG_INT64("daemon.max_size", &config->max_size),
         CONFIG_BOOLEAN("daemon.persist", &config->persist),
-        CONFIG_TABLE(
-            "daemon.seats", &config->configured_seats, extract_configured_seats
-        ),
+        CONFIG_BOOLEAN("daemon.regular", &config->regular),
+        CONFIG_BOOLEAN("daemon.primary", &config->primary),
+        CONFIG_TABLE("daemon.seats", config, extract_configured_seats),
         CONFIG_ARRAY(
             "daemon.mime_types.allowed",
             &config->allowed_mime_types,

@@ -24,8 +24,8 @@
 
 /*
  * Parse the given config file and return result in "result". If "file" is
- * NULL, then use "$XDG_CONFIG_HOME/wlip/config.toml". Returns true on success
- * and false on failure.
+ * NULL, then use "$XDG_CONFIG_HOME/swayclip/config.toml". Returns true on
+ * success and false on failure.
  */
 bool
 config_parse(const char *file, toml_result_t *result)
@@ -34,7 +34,7 @@ config_parse(const char *file, toml_result_t *result)
 
     if (file == NULL)
     {
-        char *dir = xdg_get_base_dir(XDG_CONFIG_HOME, "wlip");
+        char *dir = xdg_get_base_dir(XDG_CONFIG_HOME, "swayclip");
 
         if (dir == NULL)
             return false;

@@ -36,14 +36,6 @@ wayland_ct_lib = static_library(
   link_with: [util_lib, log_lib, event_lib]
 )
 
-
-bytes_lib = static_library(
-  'bytes',
-  'bytes.c',
-  'bytes.h',
-  include_directories: include_directories('.'),
-)
-
 xdg_lib = static_library(
   'xdg',
   'xdg.c',
@@ -62,3 +54,4 @@ config_util_lib = static_library(
 
 subdir('sc')
 subdir('tomlc17')
+subdir('sha256')
