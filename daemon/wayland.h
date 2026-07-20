@@ -80,4 +80,5 @@ struct wayland
 bool wayland_init(struct wayland *wayland, struct wayland_signals signals, struct eventloop *loop, struct config *config);
 void wayland_uninit(struct wayland *wayland);
 void wayland_event_noop();
+int wayland_get_offer_fd(struct wayland *wayland, struct ext_data_control_offer_v1 *offer, const char *mime_type);
 // clang-format on

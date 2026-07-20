@@ -18,23 +18,25 @@
 
 #pragma once
 
-#include "event.h"
-#include <stdbool.h>
-#include <wayland-client.h>
+#include "sc/sc_array.h"
+#include <stddef.h>
+#include <time.h>
 
-struct wayland_ct
+struct io_read
 {
-    struct wl_display  *display;
-    struct wl_registry *registry;
+    // Set by called
+    int      fd;
+    uint8_t *buf;
+    size_t   bufsize;
+    void (*data_callback)(uint8_t *, ssize_t, void *);
+    void *callback_udata;
 
-    int fd;
-    int prepare_id;
-
-    struct eventloop *loop;
+    // Set by function
+    struct sc_array_8 arr;
 };
 
 // clang-format off
-bool wayland_ct_init(struct wayland_ct *wct, struct eventloop *loop);
-void wayland_ct_uninit(struct wayland_ct *wct);
-bool wayland_ct_flush(struct wayland_ct *wct);
+int64_t get_time_ns(clockid_t id);
+bool set_fd_nonblocking(int fd);
+bool io_read(struct io_read *ctx, int timeout);
 // clang-format on

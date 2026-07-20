@@ -18,6 +18,7 @@
 
 #include "wayland_ct.h"
 #include "log.h"
+#include <poll.h>
 
 static bool
 display_prepare_callback(void *udata)
@@ -115,4 +116,43 @@ wayland_ct_uninit(struct wayland_ct *wct)
     eventloop_del_prepare(wct->loop, wct->prepare_id);
     wl_registry_destroy(wct->registry);
     wl_display_disconnect(wct->display);
+}
+
+bool
+wayland_ct_flush(struct wayland_ct *wct)
+{
+    while (true)
+    {
+        int ret = wl_display_flush(wct->display);
+
+        if (ret == -1)
+        {
+            if (errno == EAGAIN)
+            {
+                struct pollfd pfd = {.fd = wct->fd, .events = POLLOUT};
+
+                ret = poll(&pfd, 1, 3000);
+
+                if (ret <= 0)
+                {
+                    if (ret == -1)
+                        log_errerror("Error polling Wayland display");
+                    else
+                        log_errerror(
+                            "Timed out waiting Wayland display to be writable"
+                        );
+                    return false;
+                }
+
+                if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
+                    return false;
+
+                continue;
+            }
+            log_errerror("Error flushing Wayland display");
+            return false;
+        }
+        break;
+    }
+    return true;
 }

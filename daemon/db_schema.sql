@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS Entries (
 CREATE TABLE IF NOT EXISTS Mime_types (
     Id              INTEGER NOT NULL,
     Mime_type       TEXT NOT NULL,
-    Data_id         BLOB(32),
+    Data_id         BLOB(32), -- If NULL, then no data asssociated with entry.
     PRIMARY KEY (Id, Mime_type),
     FOREIGN KEY (Id) REFERENCES Entries(Id) ON DELETE CASCADE,
     FOREIGN KEY (Data_id) REFERENCES Data(Data_id) ON DELETE RESTRICT

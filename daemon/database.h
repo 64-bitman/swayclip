@@ -22,6 +22,14 @@
 #include <sqlite3.h>
 #include <stdbool.h>
 
+enum database_transaction
+{
+    DB_TRANSACTION_BEGIN,
+    DB_TRANSACTION_IMMEDIATE,
+    DB_TRANSACTION_COMMIT,
+    DB_TRANSACTION_ROLLBACK,
+};
+
 struct database
 {
     sqlite3 *handle;
@@ -37,6 +45,10 @@ struct database
 
         sqlite3_stmt *save_setting;
         sqlite3_stmt *get_setting;
+
+        sqlite3_stmt *new_entry;
+        sqlite3_stmt *new_mime_type;
+        sqlite3_stmt *new_data;
     } stmt;
 };
 
@@ -45,4 +57,7 @@ bool database_init(struct database *db, const char *dir, struct config *config);
 void database_uninit(struct database *db);
 bool database_save_setting(struct database *db, const char *key, int type, ...);
 bool database_get_setting(struct database *db, const char *key, int type, ...);
+bool database_do_transaction(struct database *db, enum database_transaction type);
+int64_t database_new_entry(struct database *db);
+bool database_new_mime_type(struct database *db, int64_t id, const char *mime_type, const uint8_t *data_id, uint8_t *data, size_t len);
 // clang-format on

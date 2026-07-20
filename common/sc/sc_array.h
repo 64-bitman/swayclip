@@ -36,63 +36,117 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h> // IWYU pragma: keep
 #include <stdlib.h>
+#include <string.h> // IWYU pragma: keep
 
 #define SC_ARRAY_VERSION "2.0.0"
 
 #ifdef SC_HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #else
-#define sc_array_realloc realloc
-#define sc_array_free free
+#    define sc_array_realloc realloc
+#    define sc_array_free free
 #endif
 
 #ifndef SC_ARRAY_MAX
-#define SC_ARRAY_MAX UINT32_MAX
+#    define SC_ARRAY_MAX UINT32_MAX
 #endif
 
 #define sc_array_def(T, name)                                                  \
-	struct sc_array_##name {                                               \
-		bool oom;                                                      \
-		uint32_t cap;                                                    \
-		uint32_t size;                                                   \
-		/* NOLINTNEXTLINE */                                           \
-		T *elems;                                                      \
-	}
+    struct sc_array_##name                                                     \
+    {                                                                          \
+        bool     oom;                                                          \
+        uint32_t cap;                                                          \
+        uint32_t size;                                                         \
+        /* NOLINTNEXTLINE */                                                   \
+        T *elems;                                                              \
+    }
 /**
  * Init array
  * @param a array
  */
 #define sc_array_init(a)                                                       \
-	do {                                                                   \
-		memset((a), 0, sizeof(*(a)));                                  \
-	} while (0)
+    do                                                                         \
+    {                                                                          \
+        memset((a), 0, sizeof(*(a)));                                          \
+    } while (0)
 
 /**
  * Destroy array
  * @param a array
  */
 #define sc_array_term(a)                                                       \
-	do {                                                                   \
-		sc_array_free((a)->elems);                                     \
-		sc_array_init(a);                                              \
-	} while (0)
+    do                                                                         \
+    {                                                                          \
+        sc_array_free((a)->elems);                                             \
+        sc_array_init(a);                                                      \
+    } while (0)
 
 /*
  * Set capacity of array
  */
-#define sc_array_set_capacity(a, capacity) \
-    do { \
-        void *_new = sc_array_realloc((a)->elems, \
-                (capacity) * sizeof(*((a)->elems))); \
-        if (_new == NULL) \
-        { \
-            (a)->oom = true; \
-            break; \
-        } \
-        (a)->cap = capacity; \
-        (a)->elems = _new; \
+#define sc_array_set_capacity(a, capacity)                                     \
+    do                                                                         \
+    {                                                                          \
+        void *_new =                                                           \
+            sc_array_realloc((a)->elems, (capacity) * sizeof(*((a)->elems)));  \
+        if (_new == NULL)                                                      \
+        {                                                                      \
+            (a)->oom = true;                                                   \
+            break;                                                             \
+        }                                                                      \
+        (a)->cap = capacity;                                                   \
+        (a)->elems = _new;                                                     \
+    } while (0)
+
+/*
+ * Concatenate raw buffer to array with type check
+ */
+#define sc_array_concat(a, buf, count)                                         \
+    do                                                                         \
+    {                                                                          \
+        const uint32_t _max = SC_ARRAY_MAX / sizeof(*(a)->elems);              \
+        const size_t   _cnt = (size_t)(count);                                 \
+        uint32_t       _cap;                                                   \
+        void          *_p;                                                     \
+                                                                               \
+        if (_cnt == 0)                                                         \
+        {                                                                      \
+            (a)->oom = false;                                                  \
+            break;                                                             \
+        }                                                                      \
+                                                                               \
+        if (_cnt > (size_t)_max || (size_t)(a)->size > (size_t)_max - _cnt)    \
+        {                                                                      \
+            (a)->oom = true;                                                   \
+            break;                                                             \
+        }                                                                      \
+                                                                               \
+        if ((a)->cap < (a)->size + (uint32_t)_cnt)                             \
+        {                                                                      \
+            _cap = (a)->cap == 0 ? 4 : (a)->cap;                               \
+            while (_cap < (a)->size + (uint32_t)_cnt)                          \
+            {                                                                  \
+                if (_cap > _max / 2)                                           \
+                {                                                              \
+                    _cap = (a)->size + (uint32_t)_cnt;                         \
+                    break;                                                     \
+                }                                                              \
+                _cap *= 2;                                                     \
+            }                                                                  \
+            _p = sc_array_realloc((a)->elems, _cap * sizeof(*((a)->elems)));   \
+            if (_p == NULL)                                                    \
+            {                                                                  \
+                (a)->oom = true;                                               \
+                break;                                                         \
+            }                                                                  \
+            (a)->cap = _cap;                                                   \
+            (a)->elems = _p;                                                   \
+        }                                                                      \
+                                                                               \
+        memcpy((a)->elems + (a)->size, (buf), _cnt * sizeof(*((a)->elems)));   \
+        (a)->size += (uint32_t)_cnt;                                           \
+        (a)->oom = false;                                                      \
     } while (0)
 
 /**
@@ -103,39 +157,43 @@
  * @param k elem
  */
 #define sc_array_add(a, k)                                                     \
-	do {                                                                   \
-		const uint32_t _max = SC_ARRAY_MAX / sizeof(*(a)->elems);        \
-		uint32_t _cap;                                                   \
-		void *_p;                                                      \
+    do                                                                         \
+    {                                                                          \
+        const uint32_t _max = SC_ARRAY_MAX / sizeof(*(a)->elems);              \
+        uint32_t       _cap;                                                   \
+        void          *_p;                                                     \
                                                                                \
-		if ((a)->cap == (a)->size) {                                   \
-			if ((a)->cap > _max / 2) {                             \
-				(a)->oom = true;                               \
-				break;                                         \
-			}                                                      \
-			_cap = (a)->cap == 0 ? 4 : (a)->cap * 2;               \
-			_p = sc_array_realloc((a)->elems,                      \
-					      _cap * sizeof(*((a)->elems)));   \
-			if (_p == NULL) {                                      \
-				(a)->oom = true;                               \
-				break;                                         \
-			}                                                      \
-			(a)->cap = _cap;                                       \
-			(a)->elems = _p;                                       \
-		}                                                              \
-		(a)->oom = false;                                              \
-		(a)->elems[(a)->size++] = k;                                   \
-	} while (0)
+        if ((a)->cap == (a)->size)                                             \
+        {                                                                      \
+            if ((a)->cap > _max / 2)                                           \
+            {                                                                  \
+                (a)->oom = true;                                               \
+                break;                                                         \
+            }                                                                  \
+            _cap = (a)->cap == 0 ? 4 : (a)->cap * 2;                           \
+            _p = sc_array_realloc((a)->elems, _cap * sizeof(*((a)->elems)));   \
+            if (_p == NULL)                                                    \
+            {                                                                  \
+                (a)->oom = true;                                               \
+                break;                                                         \
+            }                                                                  \
+            (a)->cap = _cap;                                                   \
+            (a)->elems = _p;                                                   \
+        }                                                                      \
+        (a)->oom = false;                                                      \
+        (a)->elems[(a)->size++] = k;                                           \
+    } while (0)
 
 /**
  * Deletes items from the array without deallocating underlying memory
  * @param a array
  */
 #define sc_array_clear(a)                                                      \
-	do {                                                                   \
-		(a)->size = 0;                                                 \
-		(a)->oom = false;                                              \
-	} while (0)
+    do                                                                         \
+    {                                                                          \
+        (a)->size = 0;                                                         \
+        (a)->oom = false;                                                      \
+    } while (0)
 
 /**
  * @param a array
@@ -165,17 +223,22 @@
  *   @param i element index, If 'i' is out of the range, result is undefined.
  */
 #define sc_array_del(a, i)                                                     \
-	do {                                                                   \
-        uint32_t idx = (i);                                              \
-        assert(idx < (a)->size);                                       \
-        \
-        const uint32_t _cnt = (a)->size - (idx) - 1;                     \
-		if (_cnt > 0) {                                                \
-			memmove(&((a)->elems[idx]), &((a)->elems[idx + 1]),    \
-				_cnt * sizeof(*((a)->elems)));                 \
-		}                                                              \
-		(a)->size--;                                                   \
-	} while (0)
+    do                                                                         \
+    {                                                                          \
+        uint32_t idx = (i);                                                    \
+        assert(idx < (a)->size);                                               \
+                                                                               \
+        const uint32_t _cnt = (a)->size - (idx) - 1;                           \
+        if (_cnt > 0)                                                          \
+        {                                                                      \
+            memmove(                                                           \
+                &((a)->elems[idx]),                                            \
+                &((a)->elems[idx + 1]),                                        \
+                _cnt * sizeof(*((a)->elems))                                   \
+            );                                                                 \
+        }                                                                      \
+        (a)->size--;                                                           \
+    } while (0)
 
 /**
  * Deletes the element at index i, replaces last element with the deleted
@@ -188,21 +251,23 @@
  * @param i index. If 'i' is out of the range, result is undefined.
  */
 #define sc_array_del_unordered(a, i)                                           \
-	do {                                                                   \
-                uint32_t idx = (i);                                              \
-		assert(idx < (a)->size);                                       \
-		(a)->elems[idx] = (a)->elems[(--(a)->size)];                   \
-	} while (0)
+    do                                                                         \
+    {                                                                          \
+        uint32_t idx = (i);                                                    \
+        assert(idx < (a)->size);                                               \
+        (a)->elems[idx] = (a)->elems[(--(a)->size)];                           \
+    } while (0)
 
 /**
  * Deletes the last element. If current size is zero, result is undefined.
  * @param a array
  */
 #define sc_array_del_last(a)                                                   \
-	do {                                                                   \
-		assert((a)->size != 0);                                        \
-		(a)->size--;                                                   \
-	} while (0)
+    do                                                                         \
+    {                                                                          \
+        assert((a)->size != 0);                                                \
+        (a)->size--;                                                           \
+    } while (0)
 
 /**
  * Sorts the array using qsort()
@@ -210,7 +275,7 @@
  * @param cmp comparator, check qsort() documentation for details
  */
 #define sc_array_sort(a, cmp)                                                  \
-	(qsort((a)->elems, (a)->size, sizeof(*(a)->elems), cmp))
+    (qsort((a)->elems, (a)->size, sizeof(*(a)->elems), cmp))
 
 /**
  * Returns last element. If array is empty, result is undefined.
@@ -223,12 +288,12 @@
  * @param elem elem
  */
 #define sc_array_foreach(a, elem)                                              \
-	for (uint32_t _k = 1, _i = 0; _k && _i != (a)->size; _k = !_k, _i++)     \
-		for ((elem) = (a)->elems[_i]; _k; _k = !_k)
+    for (uint32_t _k = 1, _i = 0; _k && _i != (a)->size; _k = !_k, _i++)       \
+        for ((elem) = (a)->elems[_i]; _k; _k = !_k)
 
-#define sc_array_foreach_ptr(a, elem)                                              \
-	for (uint32_t _k = 1, _i = 0; _k && _i != (a)->size; _k = !_k, _i++)     \
-		for ((elem) = (a)->elems + _i; _k; _k = !_k)
+#define sc_array_foreach_ptr(a, elem)                                          \
+    for (uint32_t _k = 1, _i = 0; _k && _i != (a)->size; _k = !_k, _i++)       \
+        for ((elem) = (a)->elems + _i; _k; _k = !_k)
 
 //        (type, name)
 sc_array_def(int, int);
@@ -239,6 +304,7 @@ sc_array_def(unsigned long, ulong);
 sc_array_def(unsigned long long, ull);
 sc_array_def(uint32_t, 32);
 sc_array_def(uint64_t, 64);
+sc_array_def(uint8_t, 8);
 sc_array_def(double, double);
 sc_array_def(const char *, str);
 sc_array_def(char *, astr);

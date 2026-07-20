@@ -53,5 +53,13 @@ config_util_lib = static_library(
   'config_util.c',
   'config_util.h',
   include_directories: include_directories('.'),
-  link_with: [util_lib, log_lib, xdg_lib]
+  link_with: [sc_lib, util_lib, log_lib, xdg_lib]
+)
+
+io_lib = static_library(
+  'io',
+  'io.c',
+  'io.h',
+  include_directories: include_directories('.'),
+  link_with: [sc_lib, util_lib, log_lib]
 )

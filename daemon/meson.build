@@ -17,7 +17,8 @@ swayclip = executable(
     xdg_lib,
     config_util_lib,
     daemon_proto_lib,
-    sha256_lib
+    sha256_lib,
+    io_lib
   ],
   install: true
 )

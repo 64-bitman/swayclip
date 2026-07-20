@@ -593,3 +593,31 @@ void
 wayland_event_noop()
 {
 }
+
+int
+wayland_get_offer_fd(
+    struct wayland                   *wayland,
+    struct ext_data_control_offer_v1 *offer,
+    const char                       *mime_type
+)
+{
+    int fds[2];
+
+    if (pipe(fds) == -1)
+    {
+        log_errerror("Error creating pipe");
+        return -1;
+    }
+
+    ext_data_control_offer_v1_receive(offer, mime_type, fds[1]);
+    // Close our write-end because we don't need it
+    close(fds[1]);
+
+    if (!wayland_ct_flush(&wayland->wct))
+    {
+        close(fds[0]);
+        return -1;
+    }
+
+    return fds[0];
+}

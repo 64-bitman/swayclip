@@ -17,7 +17,9 @@
  */
 
 #include "common/event.h"
+#include "common/io.h"
 #include "common/log.h"
+#include "common/sha256/sha256.h"
 #include "common/version.h"
 #include "config.h"
 #include "database.h"
@@ -37,6 +39,15 @@ struct state
 
     struct wayland  wayland;
     struct database db;
+
+    // ID of current entry that all enabled selections are synced to. -1 if
+    // clipboard is cleared.
+    int64_t id;
+
+    // Hash of last/most recent selection event. Used to check if a new
+    // selection event is the same in terms of mime types and data.
+    uint8_t selection_hash[SHA256_BLOCK_SIZE];
+    bool    selection_hash_init; // If "selection_hash" is initialized
 };
 
 static bool
@@ -64,6 +75,14 @@ signal_callback(int fd, int events UNUSED, void *udata)
 }
 
 static void
+read_callback(uint8_t *buf, ssize_t r, void *udata)
+{
+    SHA256_CTX *sha_ctx = udata;
+
+    sha256_update(sha_ctx, (BYTE *)buf, r);
+}
+
+static void
 wsignal_selection(
     struct ext_data_control_offer_v1 *offer,
     const struct sc_array_astr       *mime_types,
@@ -72,9 +91,114 @@ wsignal_selection(
 {
     struct state *state = udata;
 
-    (void)offer;
-    (void)mime_types;
-    (void)state;
+    if (!database_do_transaction(&state->db, DB_TRANSACTION_IMMEDIATE))
+        return;
+
+    // SHA256 hash used to represent this selection event.
+    SHA256_CTX sha_ctx;
+    int64_t    id = database_new_entry(&state->db);
+    bool       ret = false;
+
+    if (id == -1)
+        goto exit;
+
+    sha256_init(&sha_ctx);
+
+    const char *mime_type;
+
+    sc_array_foreach(mime_types, mime_type)
+    {
+        int fd = wayland_get_offer_fd(&state->wayland, offer, mime_type);
+
+        if (fd == -1)
+            goto exit;
+
+        if (!set_fd_nonblocking(fd))
+        {
+            close(fd);
+            goto exit;
+        }
+
+        static uint8_t buf[4096];
+        static uint8_t data_id[SHA256_BLOCK_SIZE];
+        SHA256_CTX     data_sha_ctx;
+
+        sha256_init(&data_sha_ctx);
+
+        struct io_read ctx = {
+            .fd = fd,
+            .buf = buf,
+            .bufsize = sizeof(buf),
+            .data_callback = read_callback,
+            .callback_udata = &data_sha_ctx
+        };
+
+        if (!io_read(&ctx, 3000))
+        {
+            close(fd);
+            goto exit;
+        }
+
+        close(fd);
+
+        struct sc_array_8 *arr = &ctx.arr;
+
+        // Check if data is bigger than configured max size. Shouldn't need to
+        // worry about integer overflow, because that is checked in io_read().
+        if (sc_array_size(arr) > state->config.max_size)
+            goto exit;
+
+        sha256_final(&sha_ctx, data_id);
+
+        sha256_update(&sha_ctx, (BYTE *)mime_type, strlen(mime_type));
+        sha256_update(&sha_ctx, data_id, SHA256_BLOCK_SIZE);
+
+        if (!database_new_mime_type(
+                &state->db,
+                id,
+                mime_type,
+                data_id,
+                sc_array_ptr(arr, 0),
+                sc_array_size(arr)
+            ))
+            goto exit;
+
+        sc_array_term(arr);
+    }
+
+    static uint8_t sel_hash[SHA256_BLOCK_SIZE];
+
+    sha256_final(&sha_ctx, sel_hash);
+
+    // Check if selection event is the same as the prior selection event. If
+    // so, then ignore it.
+    if (state->selection_hash_init &&
+        memcmp(sel_hash, state->selection_hash, SHA256_BLOCK_SIZE) == 0)
+    {
+        ret = false;
+    }
+    else
+    {
+        memcpy(state->selection_hash, sel_hash, SHA256_BLOCK_SIZE);
+        (void)database_save_setting(
+            &state->db,
+            "Selection_hash",
+            SQLITE_BLOB,
+            sel_hash,
+            SHA256_BLOCK_SIZE
+        );
+        state->selection_hash_init = true;
+        ret = true;
+    }
+
+exit:
+    database_do_transaction(
+        &state->db, ret ? DB_TRANSACTION_COMMIT : DB_TRANSACTION_ROLLBACK
+    );
+
+    if (ret)
+    {
+    }
 }
 
 static void

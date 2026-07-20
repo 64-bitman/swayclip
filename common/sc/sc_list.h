@@ -37,13 +37,14 @@
 
 #define SC_LIST_VERSION "2.0.0"
 
-struct sc_list {
-	struct sc_list *next;
-	struct sc_list *prev;
+struct sc_list
+{
+    struct sc_list *next;
+    struct sc_list *prev;
 };
 
 #define sc_list_entry(ptr, type, elem)                                         \
-	((type *) (void *)((char *) (ptr) -offsetof(type, elem)))
+    ((type *)(void *)((char *)(ptr) - offsetof(type, elem)))
 
 /**
  * Call once to initialize.
@@ -158,7 +159,7 @@ void sc_list_del(struct sc_list *elem);
  * }
  */
 #define sc_list_foreach(list, elem)                                            \
-	for ((elem) = (list)->next; (elem) != (list); (elem) = (elem)->next)
+    for ((elem) = (list)->next; (elem) != (list); (elem) = (elem)->next)
 
 /**
  *  It is safe to delete items from the list while using this iterator.
@@ -178,8 +179,8 @@ void sc_list_del(struct sc_list *elem);
  * }
  */
 #define sc_list_foreach_safe(list, n, elem)                                    \
-	for ((elem) = (list)->next, (n) = (elem)->next; (elem) != (list);      \
-	     (elem) = (n), (n) = (elem)->next)
+    for ((elem) = (list)->next, (n) = (elem)->next; (elem) != (list);          \
+         (elem) = (n), (n) = (elem)->next)
 
 /**
  * Reverse iterator
@@ -197,7 +198,7 @@ void sc_list_del(struct sc_list *elem);
  * }
  */
 #define sc_list_foreach_r(list, elem)                                          \
-	for ((elem) = (list)->prev; (elem) != (list); (elem) = (elem)->prev)
+    for ((elem) = (list)->prev; (elem) != (list); (elem) = (elem)->prev)
 
 /**
  *  Reverse iterator.
@@ -220,7 +221,7 @@ void sc_list_del(struct sc_list *elem);
  * }
  */
 #define sc_list_foreach_safe_r(list, n, elem)                                  \
-	for ((elem) = (list)->prev, (n) = (elem)->prev; (elem) != (list);      \
-	     (elem) = (n), (n) = (elem)->prev)
+    for ((elem) = (list)->prev, (n) = (elem)->prev; (elem) != (list);          \
+         (elem) = (n), (n) = (elem)->prev)
 
 #endif
