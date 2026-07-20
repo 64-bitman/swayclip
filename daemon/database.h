@@ -49,8 +49,17 @@ struct database
         sqlite3_stmt *new_entry;
         sqlite3_stmt *new_mime_type;
         sqlite3_stmt *new_data;
+
+        sqlite3_stmt *get_mime_types;
+        sqlite3_stmt *get_data_rowid;
     } stmt;
 };
+
+#define DB_SETTING_MAX_ENTRIES "Max_entries"
+#define DB_SETTING_SELECTION_HASH "Selection_hash"
+#define DB_SETTING_LAST_ENTRY "Last_entry"
+
+typedef void (*db_mime_type_callback)(const char *mime_type, void *udata);
 
 // clang-format off
 bool database_init(struct database *db, const char *dir, struct config *config);
@@ -60,4 +69,6 @@ bool database_get_setting(struct database *db, const char *key, int type, ...);
 bool database_do_transaction(struct database *db, enum database_transaction type);
 int64_t database_new_entry(struct database *db);
 bool database_new_mime_type(struct database *db, int64_t id, const char *mime_type, const uint8_t *data_id, uint8_t *data, size_t len);
+bool database_get_mime_types(struct database *db, int64_t id, db_mime_type_callback callback, void *udata);
+sqlite3_blob *database_get_data(struct database *db, int64_t id, const char *mime_type);
 // clang-format on

@@ -24,19 +24,32 @@
 
 struct io_read
 {
-    // Set by called
+    // Set by caller
     int      fd;
     uint8_t *buf;
     size_t   bufsize;
-    void (*data_callback)(uint8_t *, ssize_t, void *);
+    void (*data_callback)(uint8_t *buf, ssize_t len, void *udata);
     void *callback_udata;
 
     // Set by function
     struct sc_array_8 arr;
 };
 
+struct io_write
+{
+    // Set by caller
+    int      fd;
+    uint8_t *buf;
+    size_t   bufsize;
+    // clang-format off
+    bool (*data_callback)(uint8_t *buf, size_t sz, size_t *len, void *udata);
+    // clang-format on
+    void *callback_udata;
+};
+
 // clang-format off
 int64_t get_time_ns(clockid_t id);
 bool set_fd_nonblocking(int fd);
 bool io_read(struct io_read *ctx, int timeout);
+bool io_write(struct io_write *ctx, int timeout);
 // clang-format on

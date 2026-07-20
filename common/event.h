@@ -22,7 +22,7 @@
 #include <pthread.h>
 #include <sys/epoll.h>
 
-// Return true to remove source
+// Return true to remove source (fd will not be closed).
 typedef bool (*eventsource_callback)(int fd, int events, void *udata);
 
 // Return true to remove source. Do not remove other prepare sources in the

@@ -66,6 +66,13 @@ struct wayland_signals
         // clang-format on
         void *callback_udata;
     } set;
+
+    // Should return true if there is something to set the selection to
+    struct
+    {
+        bool (*callback)(void *udata);
+        void *callback_udata;
+    } can_set;
 };
 
 struct wayland

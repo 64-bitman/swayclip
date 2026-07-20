@@ -26,7 +26,7 @@ display_prepare_callback(void *udata)
     struct wayland_ct *wct = udata;
 
     if (wct->read_prepared)
-        return false; // Already have an outstanding prepare_read
+        goto flush; // Already have an outstanding prepare_read
 
     while (wl_display_prepare_read(wct->display) == -1)
         if (wl_display_dispatch_pending(wct->display) == -1)
@@ -36,11 +36,9 @@ display_prepare_callback(void *udata)
         }
     wct->read_prepared = true;
 
-    if (wl_display_flush(wct->display) == -1)
-    {
-        log_errerror("Error flushing Wayland display");
+flush:
+    if (!wayland_ct_flush(wct))
         goto exit;
-    }
     return false;
 exit:
     eventloop_stop(wct->loop);

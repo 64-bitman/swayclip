@@ -85,7 +85,8 @@ static void
 eventsource_del(struct eventsource *source, struct eventloop *loop)
 {
     if (epoll_ctl(loop->epoll, EPOLL_CTL_DEL, source->fd, NULL) == -1)
-        log_errwarn("Error deleting fd %d from epoll", source->fd);
+        if (errno != EBADF)
+            log_errwarn("Error deleting fd %d from epoll", source->fd);
 
     sc_list_del(&source->link);
     free(source);

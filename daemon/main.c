@@ -40,9 +40,12 @@ struct state
     struct wayland  wayland;
     struct database db;
 
-    // ID of current entry that all enabled selections are synced to. -1 if
-    // clipboard is cleared.
+    uint8_t buf[4096]; // Used for I/O operations
+
+    // ID of current entry that all enabled selections are synced to. -1 if no
+    // entry set, or if "cleared" is true, then clipboard is cleared.
     int64_t id;
+    bool    cleared;
 
     // Hash of last/most recent selection event. Used to check if a new
     // selection event is the same in terms of mime types and data.
@@ -72,6 +75,17 @@ signal_callback(int fd, int events UNUSED, void *udata)
         return true;
     }
     return false;
+}
+
+static void
+set(struct state *state, struct selection *ignore)
+{
+    if (database_save_setting(
+            &state->db, DB_SETTING_LAST_ENTRY, SQLITE_INTEGER, state->id
+        ))
+        wayland_set(&state->wayland, ignore);
+    else
+        state->id = -1;
 }
 
 static void
@@ -106,6 +120,7 @@ wsignal_selection(
     sha256_init(&sha_ctx);
 
     const char *mime_type;
+    uint8_t     data_id[SHA256_BLOCK_SIZE];
 
     sc_array_foreach(mime_types, mime_type)
     {
@@ -115,30 +130,22 @@ wsignal_selection(
             goto exit;
 
         if (!set_fd_nonblocking(fd))
-        {
-            close(fd);
             goto exit;
-        }
 
-        static uint8_t buf[4096];
-        static uint8_t data_id[SHA256_BLOCK_SIZE];
-        SHA256_CTX     data_sha_ctx;
+        SHA256_CTX data_sha_ctx;
 
         sha256_init(&data_sha_ctx);
 
         struct io_read ctx = {
             .fd = fd,
-            .buf = buf,
-            .bufsize = sizeof(buf),
+            .buf = state->buf,
+            .bufsize = sizeof(state->buf),
             .data_callback = read_callback,
             .callback_udata = &data_sha_ctx
         };
 
         if (!io_read(&ctx, 3000))
-        {
-            close(fd);
             goto exit;
-        }
 
         close(fd);
 
@@ -149,7 +156,7 @@ wsignal_selection(
         if (sc_array_size(arr) > state->config.max_size)
             goto exit;
 
-        sha256_final(&sha_ctx, data_id);
+        sha256_final(&data_sha_ctx, data_id);
 
         sha256_update(&sha_ctx, (BYTE *)mime_type, strlen(mime_type));
         sha256_update(&sha_ctx, data_id, SHA256_BLOCK_SIZE);
@@ -167,7 +174,7 @@ wsignal_selection(
         sc_array_term(arr);
     }
 
-    static uint8_t sel_hash[SHA256_BLOCK_SIZE];
+    uint8_t sel_hash[SHA256_BLOCK_SIZE];
 
     sha256_final(&sha_ctx, sel_hash);
 
@@ -183,7 +190,7 @@ wsignal_selection(
         memcpy(state->selection_hash, sel_hash, SHA256_BLOCK_SIZE);
         (void)database_save_setting(
             &state->db,
-            "Selection_hash",
+            DB_SETTING_SELECTION_HASH,
             SQLITE_BLOB,
             sel_hash,
             SHA256_BLOCK_SIZE
@@ -198,9 +205,36 @@ exit:
     );
 
     if (ret)
+    {
+        state->id = id;
         // Don't want to set the source selection, let the original source
         // client be.
-        wayland_set(&state->wayland, sel);
+        set(state, sel);
+    }
+    else
+        state->id = -1;
+}
+
+static bool
+write_callback(uint8_t *buf, size_t sz, size_t *len, void *udata)
+{
+    struct state *state = ((void **)udata)[0];
+    sqlite3_blob *blob = ((void **)udata)[1];
+    int           blob_sz = *(int *)((void **)udata)[2];
+    int          *off = ((void **)udata)[3];
+
+    *len = MIN((size_t)blob_sz - *off, sz);
+    if (sqlite3_blob_read(blob, buf, *len, *off) != SQLITE_OK)
+    {
+        log_error(
+            "Error reading from blob: %s", sqlite3_errmsg(state->db.handle)
+        );
+        return false;
+    }
+    *off += *len;
+    ;
+
+    return true;
 }
 
 static void
@@ -208,21 +242,67 @@ wsignal_send(const char *mime_type, int fd, void *udata)
 {
     struct state *state = udata;
 
-    (void)mime_type;
-    (void)fd;
-    (void)state;
+    if (state->id == -1)
+        return;
+    if (!set_fd_nonblocking(fd))
+        return;
+
+    sqlite3_blob *blob = database_get_data(&state->db, state->id, mime_type);
+
+    if (blob == NULL)
+        return;
+
+    int sz = sqlite3_blob_bytes(blob);
+    int off = 0;
+
+    void           *callback_udata[] = {state, blob, &sz, &off};
+    struct io_write ctx = {
+        .fd = fd,
+        .buf = state->buf,
+        .bufsize = sizeof(state->buf),
+        .data_callback = write_callback,
+        .callback_udata = callback_udata
+    };
+
+    (void)io_write(&ctx, 3000);
+
+    sqlite3_blob_close(blob);
+}
+
+static void
+mime_type_callback(const char *mime_type, void *udata)
+{
+    struct ext_data_control_source_v1 *source = udata;
+
+    ext_data_control_source_v1_offer(source, mime_type);
 }
 
 static struct ext_data_control_source_v1 *
-wsignal_set(struct ext_data_control_device_v1 *device, bool *clear, void *udata)
+wsignal_set(struct ext_data_control_manager_v1 *mgr, bool *clear, void *udata)
 {
     struct state *state = udata;
 
-    (void)device;
-    (void)clear;
-    (void)state;
+    struct ext_data_control_source_v1 *source = NULL;
 
-    return NULL;
+    if (state->id != -1)
+    {
+        source = ext_data_control_manager_v1_create_data_source(mgr);
+        (void)database_get_mime_types(
+            &state->db, state->id, mime_type_callback, source
+        );
+    }
+    else if (state->cleared)
+        *clear = true;
+
+    return source;
+}
+
+static bool
+wsignal_can_set(void *udata)
+{
+    struct state *state = udata;
+
+    return state->id != -1;
 }
 
 int
@@ -306,7 +386,8 @@ main(int argc, char **argv)
     struct wayland_signals wsignals = {
         .selection = {.callback = wsignal_selection, .callback_udata = &state},
         .send = {.callback = wsignal_send, .callback_udata = &state},
-        .set = {.callback = wsignal_set, .callback_udata = &state}
+        .set = {.callback = wsignal_set, .callback_udata = &state},
+        .can_set = {.callback = wsignal_can_set, .callback_udata = &state}
     };
 
     ret = database_init(&state.db, db, &state.config);
@@ -340,6 +421,20 @@ main(int argc, char **argv)
         log_errerror("Error setting up signal mask");
         goto exit;
     }
+
+    state.selection_hash_init = database_get_setting(
+        &state.db,
+        DB_SETTING_SELECTION_HASH,
+        SQLITE_BLOB,
+        state.selection_hash,
+        SHA256_BLOCK_SIZE,
+        NULL
+    );
+    if (!database_get_setting(
+            &state.db, DB_SETTING_LAST_ENTRY, SQLITE_INTEGER, &state.id
+        ))
+        state.id = -1;
+    state.cleared = false;
 
     ret = eventloop_run(&state.loop);
 

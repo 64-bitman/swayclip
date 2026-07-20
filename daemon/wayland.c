@@ -295,6 +295,14 @@ selection_event(
 
     if (offer == NULL)
     {
+        struct wayland *wayland = seat->wayland;
+
+        // If there is nothing to be set, don't add a timer
+        if (!wayland->signals.can_set.callback(
+                wayland->signals.can_set.callback_udata
+            ))
+            return;
+
         int fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
 
         if (fd == -1)
@@ -316,7 +324,7 @@ selection_event(
         }
 
         if (!eventloop_add(
-                seat->wayland->wct.loop,
+                wayland->wct.loop,
                 fd,
                 EVENT_PRIORITY_NORMAL,
                 EPOLLIN,

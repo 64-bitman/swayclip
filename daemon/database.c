@@ -23,6 +23,7 @@
 #include "common/xdg.h"
 #include "db_schema.h"
 #include <errno.h>
+#include <inttypes.h>
 #include <stddef.h>
 #include <sys/stat.h>
 
@@ -56,7 +57,14 @@ static const struct stmt_def stmt_defs[] = {
         "INSERT OR IGNORE INTO Mime_types  (Id, Mime_type, Data_id) VALUES (?, "
         "?, ?);"
     ),
-    STMT(new_data, "INSERT OR IGNORE INTO Data (Data_id, Data) VALUES (?, ?)")
+    STMT(new_data, "INSERT OR IGNORE INTO Data (Data_id, Data) VALUES (?, ?)"),
+    STMT(get_mime_types, "SELECT Mime_type FROM Mime_types WHERE Id = ?;"),
+    STMT(
+        get_data_rowid,
+        "SELECT Data.rowid FROM Mime_types LEFT JOIN Data ON Data.Data_id = "
+        "Mime_types.Data_id WHERE Mime_types.Id = ? AND Mime_types.Mime_type = "
+        "?;"
+    )
 };
 
 static bool
@@ -152,7 +160,7 @@ database_init(struct database *db, const char *dir, struct config *config)
     }
 
     database_save_setting(
-        db, "Max_entries", SQLITE_INTEGER, config->max_entries
+        db, DB_SETTING_MAX_ENTRIES, SQLITE_INTEGER, config->max_entries
     );
 
     return true;
@@ -231,7 +239,7 @@ database_save_setting(struct database *db, const char *key, int type, ...)
 /*
  * Get value of setting from database. Variadic args is pointer to storage
  * location. For blobs, first arg is buffer, second arg is max buffer size,
- * third is pointer to buffer length.
+ * third is pointer to buffer length (may be NULL).
  */
 bool
 database_get_setting(struct database *db, const char *key, int type, ...)
@@ -246,11 +254,12 @@ database_get_setting(struct database *db, const char *key, int type, ...)
 
     if (ret != SQLITE_ROW)
     {
-        log_error(
-            "Error getting value of setting \"%s\" from database: %s",
-            key,
-            sqlite3_errmsg(db->handle)
-        );
+        if (ret != SQLITE_DONE)
+            log_error(
+                "Error getting value of setting \"%s\" from database: %s",
+                key,
+                sqlite3_errmsg(db->handle)
+            );
         sqlite3_reset(stmt);
         return false;
     }
@@ -273,8 +282,8 @@ database_get_setting(struct database *db, const char *key, int type, ...)
         int            size = sqlite3_column_bytes(stmt, 0);
 
         memcpy(buf, data, MIN(size, sz));
-        *len = size;
-
+        if (len != NULL)
+            *len = size;
         break;
     }
     default:
@@ -322,7 +331,7 @@ database_do_transaction(struct database *db, enum database_transaction type)
     sqlite3_reset(stmt);
     if (ret != SQLITE_DONE)
     {
-        log_warn(
+        log_error(
             "Error starting database transaction %d: %s",
             type,
             sqlite3_errmsg(db->handle)
@@ -352,7 +361,7 @@ database_new_entry(struct database *db)
 
     if (ret != SQLITE_ROW)
     {
-        log_warn(
+        log_error(
             "Error serializing entry into database: %s",
             sqlite3_errmsg(db->handle)
         );
@@ -374,6 +383,8 @@ database_new_data(
 {
     sqlite3_stmt *stmt = db->stmt.new_data;
 
+    assert(!sqlite3_stmt_busy(stmt));
+
     sqlite3_bind_blob(stmt, 1, data_id, SHA256_BLOCK_SIZE, SQLITE_STATIC);
     sqlite3_bind_blob(stmt, 2, data, len, SQLITE_STATIC);
 
@@ -382,7 +393,7 @@ database_new_data(
     sqlite3_reset(stmt);
     if (ret != SQLITE_DONE)
     {
-        log_warn(
+        log_error(
             "Error adding data into database: %s", sqlite3_errmsg(db->handle)
         );
         return false;
@@ -412,6 +423,8 @@ database_new_mime_type(
 
     sqlite3_stmt *stmt = db->stmt.new_mime_type;
 
+    assert(!sqlite3_stmt_busy(stmt));
+
     sqlite3_bind_int64(stmt, 1, id);
     sqlite3_bind_text(stmt, 2, mime_type, -1, SQLITE_STATIC);
     if (data == NULL)
@@ -424,7 +437,7 @@ database_new_mime_type(
     sqlite3_reset(stmt);
     if (ret != SQLITE_DONE)
     {
-        log_warn(
+        log_error(
             "Error adding mime type \"%s\" to database: %s",
             mime_type,
             sqlite3_errmsg(db->handle)
@@ -433,4 +446,88 @@ database_new_mime_type(
     }
 
     return true;
+}
+
+bool
+database_get_mime_types(
+    struct database *db, int64_t id, db_mime_type_callback callback, void *udata
+)
+{
+    sqlite3_stmt *stmt = db->stmt.get_mime_types;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    sqlite3_bind_int64(stmt, 1, id);
+
+    int ret;
+
+    while ((ret = sqlite3_step(stmt)) == SQLITE_ROW)
+    {
+        const char *mime_type = (char *)sqlite3_column_text(stmt, 0);
+
+        callback(mime_type, udata);
+    }
+
+    sqlite3_reset(stmt);
+
+    if (ret != SQLITE_DONE)
+    {
+        log_error(
+            "Error getting mime types from database: %s",
+            sqlite3_errmsg(db->handle)
+        );
+        return false;
+    }
+    return true;
+}
+
+/*
+ * Return the blob object for the mime type. Returns NULL on failure.
+ */
+sqlite3_blob *
+database_get_data(struct database *db, int64_t id, const char *mime_type)
+{
+    sqlite3_stmt *stmt = db->stmt.get_data_rowid;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    sqlite3_bind_int64(stmt, 1, id);
+    sqlite3_bind_text(stmt, 2, mime_type, -1, SQLITE_STATIC);
+
+    int ret = sqlite3_step(stmt);
+
+    if (ret != SQLITE_ROW)
+    {
+        if (ret != SQLITE_DONE)
+            log_error(
+                "Error getting mime type data from database: %s",
+                sqlite3_errmsg(db->handle)
+            );
+        sqlite3_reset(stmt);
+        return NULL;
+    }
+
+    if (sqlite3_column_type(stmt, 0) == SQLITE_NULL)
+    {
+        log_debug("No rowid for %" PRId64 " %s in Data table", id, mime_type);
+        sqlite3_reset(stmt);
+        return NULL;
+    }
+
+    int64_t rowid = sqlite3_column_int64(stmt, 0);
+    sqlite3_reset(stmt);
+
+    sqlite3_blob *blob = NULL;
+
+    ret =
+        sqlite3_blob_open(db->handle, "main", "Data", "Data", rowid, 0, &blob);
+
+    if (ret != SQLITE_OK)
+    {
+        log_error("Error opening blob: %s", sqlite3_errmsg(db->handle));
+        return NULL;
+    }
+
+    assert(blob != NULL);
+    return blob;
 }
