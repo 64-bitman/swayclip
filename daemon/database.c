@@ -159,9 +159,20 @@ database_init(struct database *db, const char *dir, struct config *config)
         }
     }
 
-    database_save_setting(
-        db, DB_SETTING_MAX_ENTRIES, SQLITE_INTEGER, config->max_entries
-    );
+    if (database_save_setting(
+            db, DB_SETTING_MAX_ENTRIES, SQLITE_INTEGER, config->max_entries
+        ))
+        // Do an initial trim in case "max_entries" changed.
+        (void)database_execute_statement(
+            db,
+            "DELETE FROM Entries WHERE Id IN ("
+            "    SELECT Id FROM Entries WHERE Pinned = 0"
+            "    ORDER BY Id DESC LIMIT -1 OFFSET ("
+            "        SELECT CAST(Value AS INTEGER) FROM Settings WHERE Key = "
+            "'Max_entries'"
+            "    )"
+            ");"
+        );
 
     return true;
 }
