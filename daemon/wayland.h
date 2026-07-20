@@ -33,6 +33,8 @@ enum wayland_selection_type
 };
 
 struct wayland;
+struct seat;
+struct selection;
 
 struct wayland_signals
 {
@@ -40,11 +42,12 @@ struct wayland_signals
     struct
     {
         // clang-format off
-        void (*callback)(struct ext_data_control_offer_v1 *offer, const struct sc_array_astr *mime_types, void *udata);
+        void (*callback)(struct selection *sel, struct ext_data_control_offer_v1 *offer, const struct sc_array_astr *mime_types, void *udata);
         // clang-format on
         void *callback_udata;
     } selection;
 
+    // Do not close fd in callback
     struct
     {
         // clang-format off
@@ -59,7 +62,7 @@ struct wayland_signals
     struct
     {
         // clang-format off
-        struct ext_data_control_source_v1 *(*callback)(struct ext_data_control_device_v1 *data_device, bool *clear, void *udata);
+        struct ext_data_control_source_v1 *(*callback)(struct ext_data_control_manager_v1 *mgr, bool *clear, void *udata);
         // clang-format on
         void *callback_udata;
     } set;
@@ -81,4 +84,5 @@ bool wayland_init(struct wayland *wayland, struct wayland_signals signals, struc
 void wayland_uninit(struct wayland *wayland);
 void wayland_event_noop();
 int wayland_get_offer_fd(struct wayland *wayland, struct ext_data_control_offer_v1 *offer, const char *mime_type);
+void wayland_set(struct wayland *wayland, struct selection *ignore);
 // clang-format on

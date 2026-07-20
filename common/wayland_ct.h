@@ -31,6 +31,7 @@ struct wayland_ct
     int prepare_id;
 
     struct eventloop *loop;
+    bool              read_prepared;
 };
 
 // clang-format off

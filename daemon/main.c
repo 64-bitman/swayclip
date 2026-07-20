@@ -84,6 +84,7 @@ read_callback(uint8_t *buf, ssize_t r, void *udata)
 
 static void
 wsignal_selection(
+    struct selection                 *sel,
     struct ext_data_control_offer_v1 *offer,
     const struct sc_array_astr       *mime_types,
     void                             *udata
@@ -197,8 +198,9 @@ exit:
     );
 
     if (ret)
-    {
-    }
+        // Don't want to set the source selection, let the original source
+        // client be.
+        wayland_set(&state->wayland, sel);
 }
 
 static void

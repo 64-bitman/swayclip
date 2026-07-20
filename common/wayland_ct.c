@@ -25,19 +25,22 @@ display_prepare_callback(void *udata)
 {
     struct wayland_ct *wct = udata;
 
+    if (wct->read_prepared)
+        return false; // Already have an outstanding prepare_read
+
     while (wl_display_prepare_read(wct->display) == -1)
         if (wl_display_dispatch_pending(wct->display) == -1)
         {
             log_errerror("Error dispatching Wayland events");
             goto exit;
         }
+    wct->read_prepared = true;
 
     if (wl_display_flush(wct->display) == -1)
     {
         log_errerror("Error flushing Wayland display");
         goto exit;
     }
-
     return false;
 exit:
     eventloop_stop(wct->loop);
@@ -54,8 +57,10 @@ display_callback(int fd UNUSED, int events, void *udata)
         if (wl_display_read_events(wct->display) == -1)
         {
             log_errerror("Error reading events from Wayland display");
+            wct->read_prepared = false;
             goto exit;
         }
+        wct->read_prepared = false;
         if (wl_display_dispatch_pending(wct->display) == -1)
         {
             log_errerror("Error dispatching Wayland events");
@@ -64,6 +69,11 @@ display_callback(int fd UNUSED, int events, void *udata)
     }
     else if (events & (EPOLLHUP | EPOLLERR))
         goto exit;
+    else
+    {
+        wl_display_cancel_read(wct->display);
+        wct->read_prepared = false;
+    }
 
     return false;
 exit:
@@ -84,6 +94,7 @@ wayland_ct_init(struct wayland_ct *wct, struct eventloop *loop)
 
     wct->fd = wl_display_get_fd(wct->display);
     wct->loop = loop;
+    wct->read_prepared = false;
 
     wct->prepare_id =
         eventloop_add_prepare(loop, display_prepare_callback, wct);
@@ -131,22 +142,27 @@ wayland_ct_flush(struct wayland_ct *wct)
             {
                 struct pollfd pfd = {.fd = wct->fd, .events = POLLOUT};
 
-                ret = poll(&pfd, 1, 3000);
-
-                if (ret <= 0)
+                while (true)
                 {
-                    if (ret == -1)
-                        log_errerror("Error polling Wayland display");
-                    else
-                        log_errerror(
-                            "Timed out waiting Wayland display to be writable"
-                        );
-                    return false;
+                    ret = poll(&pfd, 1, 3000);
+
+                    if (ret <= 0)
+                    {
+                        if (ret == -1)
+                            log_errerror("Error polling Wayland display");
+                        else
+                            log_errerror(
+                                "Timed out waiting Wayland display to be "
+                                "writable"
+                            );
+                        return false;
+                    }
+
+                    if (pfd.revents & POLLIN)
+                        break;
+                    if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
+                        return false;
                 }
-
-                if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
-                    return false;
-
                 continue;
             }
             log_errerror("Error flushing Wayland display");

@@ -88,6 +88,39 @@ selection_uninit(struct selection *sel)
 }
 
 static void
+data_source_event_send(
+    void                                    *udata,
+    struct ext_data_control_source_v1 *proxy UNUSED,
+    const char                              *mime_type,
+    int                                      fd
+)
+{
+    struct selection *sel = udata;
+    struct wayland   *wayland = sel->seat->wayland;
+
+    wayland->signals.send.callback(
+        mime_type, fd, wayland->signals.send.callback_udata
+    );
+    close(fd);
+}
+
+static void
+data_source_event_cancelled(
+    void *udata, struct ext_data_control_source_v1 *proxy
+)
+{
+    struct selection *sel = udata;
+
+    if (sel->ext_data_source == proxy)
+        sel->ext_data_source = NULL;
+    ext_data_control_source_v1_destroy(proxy);
+}
+
+static const struct ext_data_control_source_v1_listener data_source_listener = {
+    .send = data_source_event_send, .cancelled = data_source_event_cancelled
+};
+
+static void
 selection_set(struct selection *sel)
 {
     struct wayland *wayland = sel->seat->wayland;
@@ -98,7 +131,7 @@ selection_set(struct selection *sel)
     );
 
     struct ext_data_control_source_v1 *source = wayland->signals.set.callback(
-        sel->seat->ext_data_device, &clear, wayland->signals.set.callback_udata
+        wayland->ext_data_mgr, &clear, wayland->signals.set.callback_udata
     );
 
     if (!clear && source == NULL)
@@ -107,6 +140,11 @@ selection_set(struct selection *sel)
     if (sel->ext_data_source != NULL)
         ext_data_control_source_v1_destroy(sel->ext_data_source);
     sel->ext_data_source = source;
+
+    if (source != NULL)
+        ext_data_control_source_v1_add_listener(
+            source, &data_source_listener, sel
+        );
 
     switch (sel->type)
     {
@@ -202,7 +240,7 @@ null_timer_callback(int fd, int events, void *udata)
     if (events & (EPOLLHUP | EPOLLERR))
     {
         log_errwarn("Error polling timer fd for null check");
-        return true;
+        goto stop;
     }
     if (!(events & EPOLLIN))
         return false;
@@ -213,7 +251,7 @@ null_timer_callback(int fd, int events, void *udata)
     if (r == -1)
     {
         log_errwarn("Error reading timer fd for null check");
-        return true;
+        goto stop;
     }
 
     struct selection *sel = udata;
@@ -222,6 +260,8 @@ null_timer_callback(int fd, int events, void *udata)
         // NULL selection event is valid, become the source client
         selection_set(sel);
 
+stop:
+    close(fd);
     return true;
 }
 
@@ -284,13 +324,15 @@ selection_event(
                 sel
             ))
             close(fd);
+        else
+            sel->null_timerfd = fd;
         return;
     }
 
     struct wayland_signals *signals = &seat->wayland->signals;
 
     signals->selection.callback(
-        offer, &seat->mime_types, signals->selection.callback_udata
+        sel, offer, &seat->mime_types, signals->selection.callback_udata
     );
     seat_clear_mime_types(seat);
 }
@@ -336,11 +378,11 @@ static const struct ext_data_control_device_v1_listener data_device_listener = {
 };
 
 static void
-seat_set(struct seat *seat)
+seat_set(struct seat *seat, struct selection *ignore)
 {
-    if (seat->sel_regular.enabled)
+    if (seat->sel_regular.enabled && &seat->sel_regular != ignore)
         selection_set(&seat->sel_regular);
-    if (seat->sel_primary.enabled)
+    if (seat->sel_primary.enabled && &seat->sel_primary != ignore)
         selection_set(&seat->sel_primary);
 }
 
@@ -362,7 +404,7 @@ wayland_seat_start(struct seat *seat)
     seat->enabled = true;
 
     // Try setting each enabled selection in case an entry is already set.
-    seat_set(seat);
+    seat_set(seat, NULL);
 }
 
 static bool
@@ -620,4 +662,21 @@ wayland_get_offer_fd(
     }
 
     return fds[0];
+}
+
+/*
+ * Sync all enabled selections, except "ignore".
+ */
+void
+wayland_set(struct wayland *wayland, struct selection *ignore)
+{
+    struct sc_list *it;
+
+    sc_list_foreach(&wayland->seats, it)
+    {
+        struct seat *seat = sc_list_entry(it, struct seat, link);
+
+        if (seat->enabled)
+            seat_set(seat, ignore);
+    }
 }
