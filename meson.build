@@ -34,7 +34,7 @@ sqlite_dep = dependency('sqlite3')
 
 includes = include_directories('.')
 
-subdir('protocol')
+subdir('protocols')
 subdir('common')
 subdir('daemon')
 subdir('tests')
