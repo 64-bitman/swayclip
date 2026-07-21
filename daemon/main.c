@@ -105,6 +105,9 @@ wsignal_selection(
 {
     struct state *state = udata;
 
+    if (sc_array_size(mime_types) == 0)
+        return;
+
     if (!database_do_transaction(&state->db, DB_TRANSACTION_IMMEDIATE))
         return;
 
