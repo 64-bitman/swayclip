@@ -24,7 +24,7 @@
 #include <stdint.h>
 #include <sys/socket.h>
 
-#define EVENT_MAGIC 0x80000000 // Got this from sway-ipc(7)
+#define IPC_EVENT_BASE (1u << 31) // Use higher bits for events
 
 enum ipc_message_type
 {
@@ -33,11 +33,12 @@ enum ipc_message_type
     IPC_MESSAGE_GET_ENTRY,
     N_IPC_REQUESTS,
 
-    IPC_MESSAGE_ENTRY_ADDED = EVENT_MAGIC,
-    IPC_MESSAGE_ENTRY_DELETED = EVENT_MAGIC + 2,
-    IPC_MESSAGE_ENTRY_UPDATED = EVENT_MAGIC + 4,
-    IPC_EVENT_LAST = IPC_MESSAGE_ENTRY_UPDATED
+    IPC_MESSAGE_ENTRY_ADDED   = IPC_EVENT_BASE | (1u << 0),
+    IPC_MESSAGE_ENTRY_DELETED = IPC_EVENT_BASE | (1u << 1),
+    IPC_MESSAGE_ENTRY_UPDATED = IPC_EVENT_BASE | (1u << 2),
 };
+#define IPC_IS_EVENT(msg)  (((uint32_t)(msg)) & IPC_EVENT_BASE)
+#define IPC_EVENT_BIT(msg)   (((uint32_t)(msg)) & ~IPC_EVENT_BASE)
 
 struct ipc_message
 {
@@ -56,7 +57,8 @@ struct ipc_write
 };
 sc_queue_def(struct ipc_write, ipc_write);
 
-// Note that "aux_fd" will not be closed after callback
+// Note that "aux_fd" will not be closed after callback. JSON object ownership
+// if transferred as well.
 typedef void (*ipc_msg_callback)(struct ipc_message *msg, void *udata);
 
 struct ipc_ct
@@ -83,6 +85,6 @@ struct ipc_ct
 // clang-format off
 bool ipc_ct_init(struct ipc_ct *ict, int fd, ipc_msg_callback callback, void *udata);
 void ipc_ct_uninit(struct ipc_ct *ict);
-int ipc_ct_process(struct ipc_ct *ict, int revents, bool poll);
+bool ipc_ct_process(struct ipc_ct *ict, int revents, bool poll, bool *need_pollout);
 bool ipc_ct_write_msg(struct ipc_ct *ict, enum ipc_message_type type, struct json_object *msg, int aux_fd);
 // clang-format on

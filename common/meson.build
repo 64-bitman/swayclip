@@ -72,3 +72,13 @@ ipc_ct_lib = static_library(
   dependencies: json_dep,
   link_with: [sc_lib, util_lib, log_lib, event_lib]
 )
+
+json_util_lib = static_library(
+  'json_util',
+  'json_util.c',
+  'json_util.h',
+  include_directories: include_directories('.'),
+  dependencies: json_dep,
+  dependencies: json_dep,
+  link_with: [util_lib, log_lib]
+)

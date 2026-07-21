@@ -17,6 +17,7 @@
  */
 
 #include "ipc_ct.h"
+#include "event.h"
 #include "io.h"
 #include "log.h"
 #include <poll.h>
@@ -40,6 +41,7 @@ ipc_ct_init(struct ipc_ct *ict, int fd, ipc_msg_callback callback, void *udata)
     ict->callback_udata = udata;
 
     ict->hdr_len = 0;
+    ict->aux_fd = -1;
     ict->got_dummy = false;
 
     sc_queue_init(&ict->write_queue);
@@ -66,13 +68,6 @@ ipc_ct_uninit(struct ipc_ct *ict)
     sc_queue_term(&ict->write_queue);
     close(ict->fd);
     json_tokener_free(ict->tokener);
-}
-
-static bool
-ipc_message_type_valid(uint32_t type)
-{
-    return type < N_IPC_REQUESTS ||
-           (type >= EVENT_MAGIC && type <= IPC_EVENT_LAST);
 }
 
 static bool
@@ -114,6 +109,7 @@ ipc_ct_read(struct ipc_ct *ict)
                     return false;
                 }
                 else if (r == 0)
+                    // EOF received
                     return false;
 
                 ict->hdr_len += r;
@@ -130,7 +126,8 @@ ipc_ct_read(struct ipc_ct *ict)
             continue;
         }
 
-        bool    valid = ict->hdr[1] > 0;
+        bool valid = ict->hdr[1] > 0; // Ignore messages with zero payload
+                                      // size
         ssize_t r;
 
         if (valid)
@@ -155,8 +152,6 @@ ipc_ct_read(struct ipc_ct *ict)
         enum json_tokener_error j_err = json_tokener_error_size;
         struct json_object     *obj;
 
-        valid = valid ? ipc_message_type_valid(ict->hdr[0]) : false;
-
         if (valid)
         {
             obj = json_tokener_parse_ex(ict->tokener, ict->buf, r);
@@ -175,8 +170,6 @@ ipc_ct_read(struct ipc_ct *ict)
                 };
 
                 ict->callback(&msg, ict->callback_udata);
-
-                json_object_put(obj);
             }
 
             ict->hdr_len = 0;
@@ -246,35 +239,27 @@ ipc_ct_write(struct ipc_ct *ict, bool *pollout)
 }
 
 /*
- * Process any ingoing and outgoing messages. Return the epoll or poll events
- * that should be polled after. Note that "revents" should only have POLLIN or
- * POLLOUT flags set. Returns -1 on error, and zero if events should not be
- * changed. Assume errors are fatal.
+ * Process any ingoing and outgoing messages. Assume errors are fatal.
  */
-int
-ipc_ct_process(struct ipc_ct *ict, int revents, bool poll)
+bool
+ipc_ct_process(struct ipc_ct *ict, int revents, bool poll, bool *need_pollout)
 {
     int pollin = poll ? POLLIN : EPOLLIN;
     int pollout = poll ? POLLOUT : EPOLLOUT;
 
     if (revents & pollin && !ipc_ct_read(ict))
-        return -1;
-
-    bool need_pollout;
+        return false;
 
     if (revents & pollout)
     {
-        if (!ipc_ct_write(ict, &need_pollout))
-            return -1;
-        if (need_pollout)
-            return pollin | pollout;
-        return pollin;
+        if (!ipc_ct_write(ict, need_pollout))
+            return false;
     }
-    return 0;
+    return true;
 }
 
 /*
- * Note that ownership of "aux_fd" is taken.
+ * Note that ownership of "msg" and "aux_fd" is taken (even on failure).
  */
 bool
 ipc_ct_write_msg(
@@ -286,16 +271,19 @@ ipc_ct_write_msg(
 {
     struct ipc_write wr = {0};
 
+    bool res = false;
+
     size_t      len;
     const char *str =
         json_object_to_json_string_length(msg, JSON_C_TO_STRING_PLAIN, &len);
 
     if (len > (size_t)UINT32_MAX)
-        return false;
+        goto exit;
 
     sc_buf_init(&wr.buf, 128);
 
-    sc_buf_put_8(&wr.buf, 0);
+    // Don't add dummy byte here, that will be sent when message is actually
+    // written to socket.
     sc_buf_put_32(&wr.buf, (uint32_t)type);
     sc_buf_put_32(&wr.buf, (uint32_t)len);
     sc_buf_put_raw(&wr.buf, str, len);
@@ -303,11 +291,14 @@ ipc_ct_write_msg(
     if (!sc_buf_valid(&wr.buf))
     {
         sc_buf_term(&wr.buf);
-        return false;
+        goto exit;
     }
 
     wr.aux_fd = aux_fd;
     sc_queue_add_last(&ict->write_queue, wr);
 
-    return true;
+    res = true;
+exit:
+    json_object_put(msg);
+    return res;
 }

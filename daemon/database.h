@@ -52,6 +52,8 @@ struct database
 
         sqlite3_stmt *get_mime_types;
         sqlite3_stmt *get_data_rowid;
+
+        sqlite3_stmt *get_history_size;
     } stmt;
 };
 
@@ -71,4 +73,5 @@ int64_t database_new_entry(struct database *db);
 bool database_new_mime_type(struct database *db, int64_t id, const char *mime_type, const uint8_t *data_id, uint8_t *data, size_t len);
 bool database_get_mime_types(struct database *db, int64_t id, db_mime_type_callback callback, void *udata);
 sqlite3_blob *database_get_data(struct database *db, int64_t id, const char *mime_type);
+int64_t database_get_history_size(struct database *db);
 // clang-format on

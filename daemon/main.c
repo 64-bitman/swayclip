@@ -18,6 +18,7 @@
 
 #include "common/event.h"
 #include "common/io.h"
+#include "common/json_util.h"
 #include "common/log.h"
 #include "common/sha256/sha256.h"
 #include "common/version.h"
@@ -307,8 +308,35 @@ wsignal_can_set(void *udata)
 }
 
 static void
-request_callback(struct json_object *req, void *udata)
+request_callback(
+    struct ipc_client *client, struct ipc_message *req, void *udata
+)
 {
+    struct state *state = udata;
+
+    switch (req->type)
+    {
+    case IPC_MESSAGE_GET_HISTORY_SIZE:
+    {
+        int64_t size = database_get_history_size(&state->db);
+
+        ipc_client_add_object(
+            client,
+            build_json_object(JUTIL_FLAGS, IPC_SUCCESS, "size", 'i', size, NULL)
+        );
+        break;
+    }
+    case IPC_MESSAGE_SUBSCRIBE:
+    {
+        break;
+    }
+    case IPC_MESSAGE_GET_ENTRY:
+    {
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 int

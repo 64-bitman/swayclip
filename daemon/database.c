@@ -64,7 +64,8 @@ static const struct stmt_def stmt_defs[] = {
         "SELECT Data.rowid FROM Mime_types LEFT JOIN Data ON Data.Data_id = "
         "Mime_types.Data_id WHERE Mime_types.Id = ? AND Mime_types.Mime_type = "
         "?;"
-    )
+    ),
+    STMT(get_history_size, "SELECT COUNT(1) FROM Entries;")
 };
 
 static bool
@@ -541,4 +542,28 @@ database_get_data(struct database *db, int64_t id, const char *mime_type)
 
     assert(blob != NULL);
     return blob;
+}
+
+/*
+ * Return number of entries in history, or -1 on failure.
+ */
+int64_t
+database_get_history_size(struct database *db)
+{
+    sqlite3_stmt *stmt = db->stmt.get_history_size;
+
+    int ret = sqlite3_step(stmt);
+
+    if (ret != SQLITE_ROW)
+    {
+        log_warn(
+            "Error getting number of entries: %s", sqlite3_errmsg(db->handle)
+        );
+        sqlite3_reset(stmt);
+        return -1;
+    }
+
+    int64_t n = sqlite3_column_int64(stmt, 0);
+    sqlite3_reset(stmt);
+    return n;
 }

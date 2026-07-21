@@ -20,7 +20,8 @@ swayclip = executable(
     daemon_proto_libs,
     sha256_lib,
     io_lib,
-    ipc_ct_lib
+    ipc_ct_lib,
+    json_util_lib
   ],
   install: true
 )

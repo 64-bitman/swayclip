@@ -231,6 +231,9 @@ io_recv_fd(int sock, int *fd, bool *again)
             log_errerror("Error receiving message from socket");
             return false;
         }
+        else if (r == 0)
+            // EOF received
+            return false;
         break;
     }
 

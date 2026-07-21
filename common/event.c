@@ -341,6 +341,11 @@ eventloop_mod(struct eventloop *loop, int fd, int events)
 {
     struct eventsource *source = eventloop_find(&loop->sources, fd);
 
+    if (source == NULL)
+        return false;
+    if (source->events == events)
+        return true;
+
     struct epoll_event ev = {.events = events, .data.ptr = source};
 
     if (epoll_ctl(loop->epoll, EPOLL_CTL_MOD, fd, &ev) == -1)

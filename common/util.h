@@ -38,9 +38,11 @@
 #ifdef __GNUC__
 #    define UNUSED __attribute__((__unused__))
 #    define PRINTFLIKE(n, m) __attribute__((format(printf, n, m)))
+#    define SENTINEL __attribute__((sentinel(0)))
 #else
 #    define UNUSED
 #    define PRINTFLIKE(n, m)
+#    define SENTINEL
 #endif
 typedef unsigned int uint;
 

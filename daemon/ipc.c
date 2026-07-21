@@ -19,6 +19,7 @@
 #include "ipc.h"
 #include "common/io.h"
 #include "common/ipc_ct.h"
+#include "common/json_util.h"
 #include "common/log.h"
 #include "common/xdg.h"
 #include <errno.h>
@@ -34,6 +35,10 @@ struct ipc_client
     // value to get bitflag.
     int events;
 
+    // Response being built for current request
+    struct json_object *resp;
+    int                 aux_fd;
+
     struct ipc   *ipc;
     struct ipc_ct ict;
 
@@ -47,26 +52,42 @@ message_callback(struct ipc_message *msg, void *udata)
 {
     struct ipc_client *client = udata;
 
+    client->resp = NULL;
+    client->aux_fd = -1;
+
+    client->ipc->callback(client, msg, client->ipc->callbacK_udata);
+
+    // Send response
+    assert(client->resp != NULL);
+    ipc_ct_write_msg(&client->ict, msg->type, client->resp, client->aux_fd);
+
+    json_object_put(msg->msg);
     if (msg->aux_fd != -1)
         close(msg->aux_fd);
+
+    (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
 }
 
 static bool
-client_callback(int fd UNUSED, int events, void *udata)
+client_callback(int fd, int events, void *udata)
 {
     struct ipc_client *client = udata;
 
-    if (events & (EPOLLHUP | EPOLLERR))
-        goto stop;
-    else if (events == 0)
+    if (events == 0)
         return false;
 
-    int ret = ipc_ct_process(&client->ict, events, false);
+    bool ret = 0;
+    bool change = true;
 
-    if (ret == -1)
+    // This logic to change fd events is kinda convoluted, is there a better
+    // way?
+    if (events & (EPOLLIN | EPOLLOUT))
+        ret = ipc_ct_process(&client->ict, events, false, &change);
+
+    if (!ret || events & (EPOLLHUP | EPOLLERR))
         goto stop;
 
-    if (ret != 0 && !eventloop_mod(client->ipc->loop, fd, ret))
+    if (!change && !eventloop_mod(client->ipc->loop, fd, EPOLLIN))
         goto stop;
 
     return false;
@@ -264,7 +285,7 @@ ipc_init(
     sc_list_init(&ipc->connections);
 
     ipc->callback = callback;
-    ipc->udata = udata;
+    ipc->callbacK_udata = udata;
 
     return true;
 fail2:
@@ -295,4 +316,71 @@ ipc_uninit(struct ipc *ipc)
     unlink(ipc->lock_path);
     free(ipc->path);
     free(ipc->lock_path);
+}
+
+bool
+ipc_client_start_array(struct ipc_client *client, int len)
+{
+    struct json_object *arr = json_object_new_array_ext(len);
+
+    client->resp = arr;
+    return arr != NULL;
+}
+
+void
+ipc_emit_event(
+    struct ipc *ipc, enum ipc_message_type type, struct json_object *obj
+)
+{
+    struct sc_list *it;
+
+    assert(IPC_IS_EVENT(type));
+
+    sc_list_foreach(&ipc->connections, it)
+    {
+        struct ipc_client *client = sc_list_entry(it, struct ipc_client, link);
+
+        ipc_ct_write_msg(&client->ict, type, json_object_get(obj), -1);
+    }
+    json_object_put(obj);
+}
+
+/*
+ * Add JSON object to response. If "obj" is NULL, nothing is done. Ownership of
+ * "obj" is always taken.
+ */
+bool
+ipc_client_add_object(struct ipc_client *client, struct json_object *obj)
+{
+    if (client->resp != NULL)
+    {
+        assert(json_object_is_type(client->resp, json_type_array));
+        if (json_object_array_add(client->resp, obj) == -1)
+        {
+            json_object_put(obj);
+            return false;
+        }
+    }
+    else
+        client->resp = obj;
+    return true;
+}
+
+void
+ipc_client_add_error(struct ipc_client *client, const char *desc)
+{
+    (void)ipc_client_add_object(
+        client,
+        build_json_object(
+            JUTIL_FLAGS, "success", 'b', false, "desc", 's', desc, NULL
+        )
+    );
+}
+
+void
+ipc_client_add_success(struct ipc_client *client)
+{
+    (void)ipc_client_add_object(
+        client, build_json_object(JUTIL_FLAGS, IPC_SUCCESS, NULL)
+    );
 }
