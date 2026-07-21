@@ -26,6 +26,7 @@
 struct eventsource
 {
     int                 fd;
+    int                 events;
     enum event_priority priority;
 
     eventsource_callback callback;
@@ -72,11 +73,12 @@ eventloop_init(struct eventloop *loop)
         return false;
     }
 
-    loop->stop = false;
+    loop->stop = true;
     loop->prepare_id = 0;
     pthread_mutex_init(&loop->stop_mut, NULL);
 
     sc_list_init(&loop->sources);
+    sc_list_init(&loop->deleted_sources);
     sc_list_init(&loop->prepares);
     return true;
 }
@@ -140,6 +142,8 @@ eventloop_run(struct eventloop *loop)
     struct epoll_event  norm[MAX_EVENTS];
     struct epoll_event *buckets[2] = {high, norm};
 
+    loop->stop = false;
+
     while (true)
     {
         int n_high = 0;
@@ -196,8 +200,18 @@ eventloop_run(struct eventloop *loop)
                 if (source->callback(
                         source->fd, bucket[k].events, source->callback_udata
                     ))
-                    eventsource_del(source, loop);
+                {
+                    sc_list_del(&source->link);
+                    sc_list_add_head(&loop->deleted_sources, &source->link);
+                }
             }
+        }
+
+        sc_list_foreach_safe(&loop->deleted_sources, tmp, it)
+        {
+            struct eventsource *source =
+                sc_list_entry(it, struct eventsource, link);
+            eventsource_del(source, loop);
         }
 
         pthread_mutex_lock(&loop->stop_mut);
@@ -263,6 +277,7 @@ eventloop_add(
     }
 
     source->fd = fd;
+    source->events = events;
     source->priority = priority;
     source->callback = callback;
     source->callback_udata = udata;
@@ -273,6 +288,22 @@ eventloop_add(
     return true;
 }
 
+static struct eventsource *
+eventloop_find(struct sc_list *list, int fd)
+{
+    struct sc_list *it;
+
+    sc_list_foreach(list, it)
+    {
+        struct eventsource *source =
+            sc_list_entry(it, struct eventsource, link);
+
+        if (source->fd == fd)
+            return source;
+    }
+    return NULL;
+}
+
 /*
  * Remove fd from event loop, note that this does not close the fd. Return true
  * if fd was found
@@ -280,20 +311,46 @@ eventloop_add(
 bool
 eventloop_del(struct eventloop *loop, int fd)
 {
-    struct sc_list *it;
+    struct eventsource *source = eventloop_find(&loop->sources, fd);
 
-    sc_list_foreach(&loop->sources, it)
+    if (loop->stop)
     {
-        struct eventsource *source =
-            sc_list_entry(it, struct eventsource, link);
-
-        if (source->fd == fd)
+        // Delete source now
+        if (source == NULL)
+            source = eventloop_find(&loop->deleted_sources, fd);
+        if (source != NULL)
         {
             eventsource_del(source, loop);
             return true;
         }
+        return false;
     }
-    return false;
+
+    if (source == NULL)
+        return false;
+    sc_list_del(&source->link);
+    sc_list_add_head(&loop->deleted_sources, &source->link);
+    return true;
+}
+
+/*
+ * Modify events of fd. Return true on success and false on failure
+ */
+bool
+eventloop_mod(struct eventloop *loop, int fd, int events)
+{
+    struct eventsource *source = eventloop_find(&loop->sources, fd);
+
+    struct epoll_event ev = {.events = events, .data.ptr = source};
+
+    if (epoll_ctl(loop->epoll, EPOLL_CTL_MOD, fd, &ev) == -1)
+    {
+        log_errerror("Error modifying epoll fd");
+        return false;
+    }
+
+    source->events = events;
+    return true;
 }
 
 /*

@@ -1,4 +1,5 @@
-/* swayclip Copyright (C) 2026 Foxe Chen
+/* swayclip
+ * Copyright (C) 2026 Foxe Chen
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -45,7 +46,7 @@ get_home(void)
 
 /*
  * Return allocated string containing the specified base dir suffixed with
- * "child". Returns NULL on failure.
+ * "child" (may be NULL). Returns NULL on failure.
  */
 char *
 xdg_get_base_dir(enum xdg_base_directory type, const char *child)
@@ -67,6 +68,9 @@ xdg_get_base_dir(enum xdg_base_directory type, const char *child)
     default:
         log_abort("Unknown base directory %d", type);
     }
+
+    if (child == NULL)
+        child = "";
 
     if (xdg == NULL)
     {

@@ -63,3 +63,12 @@ io_lib = static_library(
   include_directories: include_directories('.'),
   link_with: [sc_lib, util_lib, log_lib]
 )
+
+ipc_ct_lib = static_library(
+  'ipc_ct',
+  'ipc_ct.c',
+  'ipc_ct.h',
+  include_directories: include_directories('.'),
+  dependencies: json_dep,
+  link_with: [sc_lib, util_lib, log_lib, event_lib]
+)

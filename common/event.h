@@ -26,7 +26,7 @@
 typedef bool (*eventsource_callback)(int fd, int events, void *udata);
 
 // Return true to remove source. Do not remove other prepare sources in the
-// callback.
+// callback (including source itself).
 typedef bool (*eventprepare_callback)(void *udata);
 
 enum event_priority
@@ -44,6 +44,7 @@ struct eventloop
     int epoll;    // For normal priority sources
 
     struct sc_list sources;
+    struct sc_list deleted_sources;
 
     uint prepare_id;
     struct sc_list prepares;
@@ -57,6 +58,7 @@ void eventloop_wakeup(struct eventloop *loop);
 void eventloop_stop(struct eventloop *loop);
 bool eventloop_add(struct eventloop *loop, int fd, enum event_priority priority, int events, eventsource_callback callback, void *udata);
 bool eventloop_del(struct eventloop *loop, int fd);
+bool eventloop_mod(struct eventloop *loop, int fd, int events);
 int eventloop_add_prepare(struct eventloop *loop, eventprepare_callback callback, void *udata);
 bool eventloop_del_prepare(struct eventloop *loop, uint id);
 // clang-format on

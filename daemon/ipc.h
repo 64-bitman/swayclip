@@ -1,5 +1,7 @@
-/* swayclip
+/*
+ * swayclip
  * Copyright (C) 2026 Foxe Chen
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -16,13 +18,29 @@
 
 #pragma once
 
-enum xdg_base_directory
+#include "common/event.h"
+#include "common/sc/sc_list.h"
+#include <json.h>
+
+typedef void (*ipc_request_callback)(struct json_object *req, void *udata);
+
+struct ipc
 {
-    XDG_CONFIG_HOME,
-    XDG_DATA_HOME,
-    XDG_RUNTIME_DIR
+    struct eventloop *loop;
+
+    char *path;
+    char *lock_path;
+
+    int fd;
+    int lock_fd;
+
+    struct sc_list connections;
+
+    ipc_request_callback callback;
+    void                *udata;
 };
 
 // clang-format off
-char *xdg_get_base_dir(enum xdg_base_directory type, const char *child);
+bool ipc_init(struct ipc *ipc, struct eventloop *loop, ipc_request_callback callback, void *udata);
+void ipc_uninit(struct ipc *ipc);
 // clang-format on

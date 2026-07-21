@@ -39,6 +39,9 @@ daemon_init(Daemon *daemon, const char *config, const char *display)
     g_autoptr(GSubprocessLauncher) launcher =
         g_subprocess_launcher_new(G_SUBPROCESS_FLAGS_NONE);
 
+    g_subprocess_launcher_setenv(
+        launcher, "XDG_RUNTIME_DIR", g_get_user_runtime_dir(), TRUE
+    );
     g_subprocess_launcher_setenv(launcher, "WAYLAND_DISPLAY", display, TRUE);
 
     ASSERT_NOERROR(

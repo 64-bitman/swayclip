@@ -23,6 +23,7 @@
 #include "common/version.h"
 #include "config.h"
 #include "database.h"
+#include "ipc.h"
 #include "wayland.h"
 #include <getopt.h>
 #include <signal.h>
@@ -39,6 +40,7 @@ struct state
 
     struct wayland  wayland;
     struct database db;
+    struct ipc      ipc;
 
     uint8_t buf[4096]; // Used for I/O operations
 
@@ -143,7 +145,8 @@ wsignal_selection(
             .buf = state->buf,
             .bufsize = sizeof(state->buf),
             .data_callback = read_callback,
-            .callback_udata = &data_sha_ctx
+            .callback_udata = &data_sha_ctx,
+            .no_data = false
         };
 
         if (!io_read(&ctx, 3000))
@@ -303,6 +306,11 @@ wsignal_can_set(void *udata)
     return state->id != -1;
 }
 
+static void
+request_callback(struct json_object *req, void *udata)
+{
+}
+
 int
 main(int argc, char **argv)
 {
@@ -408,6 +416,15 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+    if (!ipc_init(&state.ipc, &state.loop, request_callback, &state))
+    {
+        wayland_uninit(&state.wayland);
+        database_uninit(&state.db);
+        config_uninit(&state.config);
+        eventloop_uninit(&state.loop);
+        return EXIT_FAILURE;
+    }
+
     int sig_fd = signalfd(-1, &block, SFD_NONBLOCK | SFD_CLOEXEC);
 
     if (sig_fd == -1 || !eventloop_add(
@@ -447,6 +464,7 @@ exit:
         close(sig_fd);
     }
 
+    ipc_uninit(&state.ipc);
     wayland_uninit(&state.wayland);
     database_uninit(&state.db);
     config_uninit(&state.config);

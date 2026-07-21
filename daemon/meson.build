@@ -4,6 +4,7 @@ swayclip = executable(
   'wayland.c',
   'config.c',
   'database.c',
+  'ipc.c',
   version_h,
   include_directories: [includes, include_directories('.')],
   dependencies: [wl_dep, json_dep, sqlite_dep],
@@ -18,7 +19,8 @@ swayclip = executable(
     config_util_lib,
     daemon_proto_libs,
     sha256_lib,
-    io_lib
+    io_lib,
+    ipc_ct_lib
   ],
   install: true
 )
