@@ -16,7 +16,7 @@ swayclip = executable(
     toml_lib,
     xdg_lib,
     config_util_lib,
-    daemon_proto_lib,
+    daemon_proto_libs,
     sha256_lib,
     io_lib
   ],

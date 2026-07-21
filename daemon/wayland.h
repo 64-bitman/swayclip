@@ -23,7 +23,7 @@
 #include "common/sc/sc_list.h"
 #include "common/wayland_ct.h"
 #include "config.h"
-#include "protocol/ext-data-control-v1.h"
+#include "protocols/ext-data-control-v1.h"
 #include <wayland-client.h>
 
 enum wayland_selection_type

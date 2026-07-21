@@ -71,7 +71,6 @@ signal_callback(int fd, int events UNUSED, void *udata)
         struct eventloop *loop = udata;
 
         eventloop_stop(loop);
-        log_info("Exiting...");
         return true;
     }
     return false;
@@ -321,7 +320,7 @@ main(int argc, char **argv)
     int   idx;
     bool  init_log = false;
     char *config = NULL;
-    char *db = NULL;
+    char *data_dir = NULL;
 
     while ((c = getopt_long(argc, argv, "l:c:s:dv", options, &idx)) != -1)
     {
@@ -335,7 +334,7 @@ main(int argc, char **argv)
             config = strdup(optarg);
             break;
         case 's':
-            db = strdup(optarg);
+            data_dir = strdup(optarg);
             break;
         case 'd':
             log_set_level(LOG_DEBUG);
@@ -345,7 +344,7 @@ main(int argc, char **argv)
             break;
         default:
             free(config);
-            free(db);
+            free(data_dir);
             return EXIT_FAILURE;
         }
     }
@@ -364,7 +363,7 @@ main(int argc, char **argv)
     {
         log_errerror("Error setting signal mask");
         free(config);
-        free(db);
+        free(data_dir);
         return EXIT_FAILURE;
     }
 
@@ -374,12 +373,15 @@ main(int argc, char **argv)
     ret = config_init(&state.config, config);
     free(config);
     if (!ret)
+    {
+        free(data_dir);
         return EXIT_FAILURE;
+    }
 
     if (!eventloop_init(&state.loop))
     {
         config_uninit(&state.config);
-        free(db);
+        free(data_dir);
         return EXIT_FAILURE;
     }
 
@@ -390,8 +392,8 @@ main(int argc, char **argv)
         .can_set = {.callback = wsignal_can_set, .callback_udata = &state}
     };
 
-    ret = database_init(&state.db, db, &state.config);
-    free(db);
+    ret = database_init(&state.db, data_dir, &state.config);
+    free(data_dir);
     if (!ret)
     {
         config_uninit(&state.config);
@@ -437,6 +439,7 @@ main(int argc, char **argv)
     state.cleared = false;
 
     ret = eventloop_run(&state.loop);
+    log_info("Exiting...");
 
 exit:
     if (sig_fd != -1)

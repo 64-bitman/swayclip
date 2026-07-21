@@ -86,7 +86,7 @@ wayland_ct_init(struct wayland_ct *wct, struct eventloop *loop)
 
     if (wct->display == NULL)
     {
-        log_errerror("Error connecting to Wayland display");
+        log_error("Error connecting to Wayland display");
         return false;
     }
 

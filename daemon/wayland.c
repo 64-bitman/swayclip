@@ -31,6 +31,8 @@ struct selection
     struct seat *seat;
     bool         enabled;
 
+    // We need to store the data offer so that we can verify NULL selection
+    // events. Probably could also do another way, but ehh...
     struct ext_data_control_offer_v1  *ext_data_offer;
     struct ext_data_control_source_v1 *ext_data_source;
 
@@ -76,14 +78,21 @@ static void
 selection_uninit(struct selection *sel)
 {
     if (sel->ext_data_offer != NULL)
+    {
         ext_data_control_offer_v1_destroy(sel->ext_data_offer);
+        sel->ext_data_offer = NULL;
+    }
     if (sel->ext_data_source != NULL)
+    {
         ext_data_control_source_v1_destroy(sel->ext_data_source);
+        sel->ext_data_source = NULL;
+    }
 
     if (sel->null_timerfd != -1)
     {
         eventloop_del(sel->seat->wayland->wct.loop, sel->null_timerfd);
         close(sel->null_timerfd);
+        sel->null_timerfd = -1;
     }
 }
 
@@ -395,11 +404,15 @@ seat_set(struct seat *seat, struct selection *ignore)
 }
 
 /*
- * Start listening to events from the seat, which should have a name.
+ * Start listening to events from the seat, which should have a name. If seat is
+ * already started, do nothing.
  */
 static void
-wayland_seat_start(struct seat *seat)
+seat_start(struct seat *seat)
 {
+    if (seat->ext_data_device != NULL)
+        return;
+
     log_debug("Starting seat \"%s\"", seat->name);
 
     seat->ext_data_device = ext_data_control_manager_v1_get_data_device(
@@ -413,6 +426,24 @@ wayland_seat_start(struct seat *seat)
 
     // Try setting each enabled selection in case an entry is already set.
     seat_set(seat, NULL);
+}
+
+static void
+seat_stop(struct seat *seat)
+{
+    if (seat->ext_data_device == NULL)
+        return;
+
+    selection_uninit(&seat->sel_regular);
+    selection_uninit(&seat->sel_primary);
+
+    if (seat->ext_data_device != NULL)
+    {
+        ext_data_control_device_v1_destroy(seat->ext_data_device);
+        seat->ext_data_device = NULL;
+    }
+
+    seat_clear_mime_types(seat);
 }
 
 static bool
@@ -471,7 +502,9 @@ seat_event_name(void *udata, struct wl_seat *proxy UNUSED, const char *name)
             &seat->sel_regular.enabled,
             &seat->sel_primary.enabled
         ))
-        wayland_seat_start(seat);
+        seat_start(seat);
+    else
+        seat_stop(seat);
 }
 
 static const struct wl_seat_listener seat_listener = {
