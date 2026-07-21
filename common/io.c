@@ -64,7 +64,7 @@ io_read(struct io_read *ctx, int timeout)
 {
     struct pollfd pfd = {.fd = ctx->fd, .events = POLLIN};
 
-    sc_array_init(&ctx->arr);
+    sc_buf_init(&ctx->data, 4096);
 
     while (true)
     {
@@ -85,7 +85,7 @@ io_read(struct io_read *ctx, int timeout)
         if (!(pfd.revents & POLLIN) &&
             pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
         {
-            if (sc_array_size(&ctx->arr) == 0)
+            if (sc_buf_size(&ctx->data) == 0)
                 goto fail;
             break;
         }
@@ -104,8 +104,8 @@ io_read(struct io_read *ctx, int timeout)
         }
         else if (r > 0)
         {
-            sc_array_concat(&ctx->arr, ctx->buf, r);
-            if (sc_array_oom(&ctx->arr))
+            sc_buf_put_raw(&ctx->data, ctx->buf, r);
+            if (!sc_buf_valid(&ctx->data))
             {
                 log_errerror("Out of memory!");
                 goto fail;
@@ -119,7 +119,7 @@ io_read(struct io_read *ctx, int timeout)
 
     return true;
 fail:
-    sc_array_term(&ctx->arr);
+    sc_buf_term(&ctx->data);
     return false;
 }
 

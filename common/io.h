@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "sc/sc_array.h"
+#include "sc/sc_buf.h"
 #include <stddef.h>
 #include <time.h>
 
@@ -32,7 +32,7 @@ struct io_read
     void *callback_udata;
 
     // Set by function
-    struct sc_array_8 arr;
+    struct sc_buf data;
 };
 
 struct io_write

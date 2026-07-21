@@ -99,56 +99,6 @@
         (a)->elems = _new;                                                     \
     } while (0)
 
-/*
- * Concatenate raw buffer to array with type check
- */
-#define sc_array_concat(a, buf, count)                                         \
-    do                                                                         \
-    {                                                                          \
-        const uint32_t _max = SC_ARRAY_MAX / sizeof(*(a)->elems);              \
-        const size_t   _cnt = (size_t)(count);                                 \
-        uint32_t       _cap;                                                   \
-        void          *_p;                                                     \
-                                                                               \
-        if (_cnt == 0)                                                         \
-        {                                                                      \
-            (a)->oom = false;                                                  \
-            break;                                                             \
-        }                                                                      \
-                                                                               \
-        if (_cnt > (size_t)_max || (size_t)(a)->size > (size_t)_max - _cnt)    \
-        {                                                                      \
-            (a)->oom = true;                                                   \
-            break;                                                             \
-        }                                                                      \
-                                                                               \
-        if ((a)->cap < (a)->size + (uint32_t)_cnt)                             \
-        {                                                                      \
-            _cap = (a)->cap == 0 ? 4 : (a)->cap;                               \
-            while (_cap < (a)->size + (uint32_t)_cnt)                          \
-            {                                                                  \
-                if (_cap > _max / 2)                                           \
-                {                                                              \
-                    _cap = (a)->size + (uint32_t)_cnt;                         \
-                    break;                                                     \
-                }                                                              \
-                _cap *= 2;                                                     \
-            }                                                                  \
-            _p = sc_array_realloc((a)->elems, _cap * sizeof(*((a)->elems)));   \
-            if (_p == NULL)                                                    \
-            {                                                                  \
-                (a)->oom = true;                                               \
-                break;                                                         \
-            }                                                                  \
-            (a)->cap = _cap;                                                   \
-            (a)->elems = _p;                                                   \
-        }                                                                      \
-                                                                               \
-        memcpy((a)->elems + (a)->size, (buf), _cnt * sizeof(*((a)->elems)));   \
-        (a)->size += (uint32_t)_cnt;                                           \
-        (a)->oom = false;                                                      \
-    } while (0)
-
 /**
  * Add elem to array, call sc_array_oom(v) to see if 'add' failed because of out
  * of memory.
@@ -304,7 +254,6 @@ sc_array_def(unsigned long, ulong);
 sc_array_def(unsigned long long, ull);
 sc_array_def(uint32_t, 32);
 sc_array_def(uint64_t, 64);
-sc_array_def(uint8_t, 8);
 sc_array_def(double, double);
 sc_array_def(const char *, str);
 sc_array_def(char *, astr);

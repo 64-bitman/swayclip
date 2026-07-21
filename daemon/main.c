@@ -151,11 +151,11 @@ wsignal_selection(
 
         close(fd);
 
-        struct sc_array_8 *arr = &ctx.arr;
+        struct sc_buf *data = &ctx.data;
 
         // Check if data is bigger than configured max size. Shouldn't need to
         // worry about integer overflow, because that is checked in io_read().
-        if (sc_array_size(arr) > state->config.max_size)
+        if (sc_buf_size(data) > (uint64_t)state->config.max_size)
             goto exit;
 
         sha256_final(&data_sha_ctx, data_id);
@@ -163,17 +163,13 @@ wsignal_selection(
         sha256_update(&sha_ctx, (BYTE *)mime_type, strlen(mime_type));
         sha256_update(&sha_ctx, data_id, SHA256_BLOCK_SIZE);
 
-        if (!database_new_mime_type(
-                &state->db,
-                id,
-                mime_type,
-                data_id,
-                sc_array_ptr(arr, 0),
-                sc_array_size(arr)
-            ))
-            goto exit;
+        bool ret = database_new_mime_type(
+            &state->db, id, mime_type, data_id, data->mem, sc_buf_size(data)
+        );
 
-        sc_array_term(arr);
+        sc_buf_term(data);
+        if (!ret)
+            goto exit;
     }
 
     uint8_t sel_hash[SHA256_BLOCK_SIZE];
