@@ -139,8 +139,8 @@ config_init(struct config *config, const char *file)
     sc_array_init(&config->blocked_mime_types);
 
     const struct config_option opts[] = {
-        CONFIG_INT64("daemon.max_entries", &config->max_entries),
-        CONFIG_INT64("daemon.max_size", &config->max_size),
+        CONFIG_INT64_POS("daemon.max_entries", &config->max_entries),
+        CONFIG_INT64_POS("daemon.max_size", &config->max_size),
         CONFIG_BOOLEAN("daemon.persist", &config->persist),
         CONFIG_BOOLEAN("daemon.regular", &config->regular),
         CONFIG_BOOLEAN("daemon.primary", &config->primary),
