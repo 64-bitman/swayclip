@@ -66,7 +66,7 @@ io_read(struct io_read *ctx, int timeout)
 {
     struct pollfd pfd = {.fd = ctx->fd, .events = POLLIN};
 
-    sc_buf_init(&ctx->data, 4096);
+    sc_array_init(&ctx->data);
 
     while (true)
     {
@@ -87,7 +87,7 @@ io_read(struct io_read *ctx, int timeout)
         if (!(pfd.revents & POLLIN) &&
             pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
         {
-            if (sc_buf_size(&ctx->data) == 0)
+            if (sc_array_size(&ctx->data) == 0)
                 goto fail;
             break;
         }
@@ -108,8 +108,8 @@ io_read(struct io_read *ctx, int timeout)
         {
             if (!ctx->no_data)
             {
-                sc_buf_put_raw(&ctx->data, ctx->buf, r);
-                if (!sc_buf_valid(&ctx->data))
+                sc_array_concat(&ctx->data, ctx->buf, r);
+                if (sc_array_oom(&ctx->data))
                 {
                     log_errerror("Out of memory!");
                     goto fail;
@@ -124,7 +124,7 @@ io_read(struct io_read *ctx, int timeout)
 
     return true;
 fail:
-    sc_buf_term(&ctx->data);
+    sc_array_term(&ctx->data);
     return false;
 }
 
@@ -186,122 +186,6 @@ io_write(struct io_write *ctx, int timeout)
 
         ptr += w;
         len -= w;
-    }
-    return true;
-}
-
-/*
- * Read a single byte from the socket and return the first fd associated with
- * the control message. If there is no fd, then set "fd" to -1.
- */
-bool
-io_recv_fd(int sock, int *fd, bool *again)
-{
-    uint8_t      dummy = 0;
-    struct iovec iov = {.iov_base = &dummy, .iov_len = 1};
-
-    struct msghdr msgh = {0};
-
-    msgh.msg_iov = &iov;
-    msgh.msg_iovlen = 1;
-
-    // https://man7.org/tlpi/code/online/dist/sockets/scm_rights_recv.c.html
-    union
-    {
-        char           buf[CMSG_SPACE(sizeof(int))];
-        struct cmsghdr align;
-    } cmsg;
-
-    msgh.msg_control = cmsg.buf;
-    msgh.msg_controllen = sizeof(cmsg.buf);
-
-    while (true)
-    {
-        ssize_t r = recvmsg(sock, &msgh, 0);
-
-        if (r == -1)
-        {
-            if (errno == EINTR)
-                continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-            {
-                *again = true;
-                return true;
-            }
-            log_errerror("Error receiving message from socket");
-            return false;
-        }
-        else if (r == 0)
-            // EOF received
-            return false;
-        break;
-    }
-
-    struct cmsghdr *cmsgp = CMSG_FIRSTHDR(&msgh);
-
-    if (cmsgp == NULL || cmsgp->cmsg_len != CMSG_LEN(sizeof(int)) ||
-        cmsgp->cmsg_level != SOL_SOCKET || cmsgp->cmsg_type != SCM_RIGHTS)
-    {
-        *fd = -1;
-        return true;
-    }
-
-    memcpy(fd, CMSG_DATA(cmsgp), sizeof(int));
-    return true;
-}
-
-/*
- * Send a dummy byte with a control message with "fd". If "fd" is -1, then send
- * no control message.
- */
-bool
-io_send_fd(int sock, int fd, bool *again)
-{
-    uint8_t      dummy = 0;
-    struct iovec iov = {.iov_base = &dummy, .iov_len = 1};
-
-    struct msghdr msgh = {0};
-
-    msgh.msg_iov = &iov;
-    msgh.msg_iovlen = 1;
-
-    if (fd != -1)
-    {
-        // https://man7.org/tlpi/code/online/dist/sockets/scm_rights_send.c.html
-        union
-        {
-            char           buf[CMSG_SPACE(sizeof(int))];
-            struct cmsghdr align;
-        } cmsg = {0};
-
-        msgh.msg_control = cmsg.buf;
-        msgh.msg_controllen = sizeof(cmsg.buf);
-
-        struct cmsghdr *cmsgp = CMSG_FIRSTHDR(&msgh);
-
-        cmsgp->cmsg_len = CMSG_LEN(sizeof(int));
-        cmsgp->cmsg_level = SOL_SOCKET;
-        cmsgp->cmsg_type = SCM_RIGHTS;
-        memcpy(CMSG_DATA(cmsgp), &fd, sizeof(int));
-    }
-
-    while (true)
-    {
-        ssize_t w = sendmsg(sock, &msgh, 0);
-
-        if (w == -1)
-        {
-            if (errno == EINTR)
-                continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-            {
-                *again = true;
-                return true;
-            }
-            log_errerror("Error receiving message from socket");
-            return false;
-        }
-        break;
     }
     return true;
 }

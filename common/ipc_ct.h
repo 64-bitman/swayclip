@@ -18,73 +18,65 @@
 
 #pragma once
 
-#include "sc/sc_buf.h"
-#include "sc/sc_queue.h"
+#include "sc/sc_array.h"
 #include <json.h>
-#include <stdint.h>
-#include <sys/socket.h>
-
-#define IPC_EVENT_BASE (1u << 31) // Use higher bits for events
 
 enum ipc_message_type
 {
-    IPC_MESSAGE_GET_HISTORY_SIZE = 0,
-    IPC_MESSAGE_SUBSCRIBE,
-    IPC_MESSAGE_GET_ENTRY,
-    N_IPC_REQUESTS,
-
-    IPC_MESSAGE_ENTRY_ADDED   = IPC_EVENT_BASE | (1u << 0),
-    IPC_MESSAGE_ENTRY_DELETED = IPC_EVENT_BASE | (1u << 1),
-    IPC_MESSAGE_ENTRY_UPDATED = IPC_EVENT_BASE | (1u << 2),
+    IPC_MESSAGE_JSON, // Payload is JSON string
+    IPC_MESSAGE_BLOB  // Payload is a binary blob
 };
-#define IPC_IS_EVENT(msg)  (((uint32_t)(msg)) & IPC_EVENT_BASE)
-#define IPC_EVENT_BIT(msg)   (((uint32_t)(msg)) & ~IPC_EVENT_BASE)
 
+union ipc_payload
+{
+    struct json_object *json;
+    struct
+    {
+        uint8_t *data;
+        uint32_t size;
+    } blob;
+};
+
+// Messages are in the format of <type><payload size><payload>, where <type> is
+// a unsigned 8 bit integer and <payload size> are unsigned 32 bit integers
+// in host order.
 struct ipc_message
 {
     enum ipc_message_type type;
-    struct json_object   *msg;
-
-    // Auxillary fd for this message, -1 if not set.
-    int aux_fd;
+    union ipc_payload     payload;
 };
 
 struct ipc_write
 {
-    struct sc_buf buf;
-    bool          sent_dummy;
-    int           aux_fd;
+    uint8_t *data;
+    uint32_t size;
+    uint32_t remaining;
 };
-sc_queue_def(struct ipc_write, ipc_write);
 
-// Note that "aux_fd" will not be closed after callback. JSON object ownership
-// if transferred as well.
-typedef void (*ipc_msg_callback)(struct ipc_message *msg, void *udata);
+sc_array_def(struct ipc_write, ipc_write);
 
 struct ipc_ct
 {
     int fd;
 
-    uint32_t hdr[2]; // type, size
-    int      hdr_len;
-    int      aux_fd;
-    bool     got_dummy;
+    bool     got_header;
+    uint32_t remaining;
+    int      scm_fd; // -1 if not set
 
-    uint32_t             remaining;
     struct json_tokener *tokener;
 
-    char buf[4096]; // Used for I/O operations
-    int  len;
+    uint8_t buf[4096];
 
-    struct sc_queue_ipc_write write_queue;
-
-    ipc_msg_callback callback;
-    void            *callback_udata;
+    struct sc_array_ipc_write write_queue;
 };
 
+typedef void (*ipc_msg_callback)(struct ipc_message *msg, void *udata);
+
 // clang-format off
-bool ipc_ct_init(struct ipc_ct *ict, int fd, ipc_msg_callback callback, void *udata);
+bool ipc_ct_init(struct ipc_ct *ict, int fd);
 void ipc_ct_uninit(struct ipc_ct *ict);
-bool ipc_ct_process(struct ipc_ct *ict, int revents, bool poll, bool *need_pollout);
-bool ipc_ct_write_msg(struct ipc_ct *ict, enum ipc_message_type type, struct json_object *msg, int aux_fd);
+bool ipc_ct_read(struct ipc_ct *ict, ipc_msg_callback callback, void *udata);
+bool ipc_ct_write(struct ipc_ct *ict);
+bool ipc_ct_has_pending_writes(struct ipc_ct *ict);
+void ipc_ct_write_msg(struct ipc_ct *ict, enum ipc_message_type type, union ipc_payload payload);
 // clang-format on

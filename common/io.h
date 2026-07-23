@@ -18,8 +18,11 @@
 
 #pragma once
 
-#include "sc/sc_buf.h"
+#include "sc/sc_array.h"
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <time.h>
 
 struct io_read
@@ -30,10 +33,10 @@ struct io_read
     size_t   bufsize;
     void (*data_callback)(uint8_t *buf, ssize_t len, void *udata);
     void *callback_udata;
-    bool no_data; // If buffer should be written to "data" each time
+    bool  no_data; // If buffer should be written to "data" each time
 
     // Set by function
-    struct sc_buf data;
+    struct sc_array_8 data;
 };
 
 struct io_write
@@ -53,8 +56,6 @@ int64_t get_time_ns(clockid_t id);
 bool set_fd_nonblocking(int fd);
 bool io_read(struct io_read *ctx, int timeout);
 bool io_write(struct io_write *ctx, int timeout);
-bool io_recv_fd(int sock, int *fd, bool *again);
-bool io_send_fd(int sock, int fd, bool *again);
 int create_lock(const char *path, int *lock_fd);
 pid_t lock_is_locked(const char *path);
 // clang-format on

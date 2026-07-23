@@ -131,7 +131,36 @@
             (a)->elems = _p;                                                   \
         }                                                                      \
         (a)->oom = false;                                                      \
-        (a)->elems[(a)->size++] = k;                                           \
+        (a)->elems[(a)->size++] = (k);                                         \
+    } while (0)
+
+#define sc_array_concat(a, b, l)                                               \
+    do                                                                         \
+    {                                                                          \
+        const uint32_t _max = SC_ARRAY_MAX / sizeof(*(a)->elems);              \
+        uint32_t       _cap;                                                   \
+        void          *_p;                                                     \
+                                                                               \
+        if ((a)->cap <= (a)->size + (l))                                       \
+        {                                                                      \
+            if ((a)->cap > _max / 2)                                           \
+            {                                                                  \
+                (a)->oom = true;                                               \
+                break;                                                         \
+            }                                                                  \
+            _cap = MAX((a)->cap == 0 ? 128 : (a)->cap * 2, (l));               \
+            _p = sc_array_realloc((a)->elems, _cap * sizeof(*((a)->elems)));   \
+            if (_p == NULL)                                                    \
+            {                                                                  \
+                (a)->oom = true;                                               \
+                break;                                                         \
+            }                                                                  \
+            (a)->cap = _cap;                                                   \
+            (a)->elems = _p;                                                   \
+        }                                                                      \
+        (a)->oom = false;                                                      \
+        memcpy((a)->elems + (a)->size, b, sizeof(*((a)->elems)) * (l));        \
+        (a)->size += (l);                                                      \
     } while (0)
 
 /**
@@ -161,6 +190,8 @@
 #define sc_array_at(a, i) ((a)->elems[i])
 
 #define sc_array_ptr(a, i) ((a)->elems + (i))
+
+#define sc_array_data(a) ((a)->elems)
 
 /**
  * @param a array
@@ -252,6 +283,7 @@ sc_array_def(long, long);
 sc_array_def(long long, ll);
 sc_array_def(unsigned long, ulong);
 sc_array_def(unsigned long long, ull);
+sc_array_def(uint8_t, 8);
 sc_array_def(uint32_t, 32);
 sc_array_def(uint64_t, 64);
 sc_array_def(double, double);

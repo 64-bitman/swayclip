@@ -26,7 +26,6 @@
 struct ipc_client;
 
 // clang-format off
-// Note that "aux_fd" will be closed after callback
 typedef void (*ipc_request_callback)(struct ipc_client *client, struct ipc_message *req, void *udata);
 // clang-format on
 
@@ -43,7 +42,7 @@ struct ipc
     struct sc_list connections;
 
     ipc_request_callback callback;
-    void                *callbacK_udata;
+    void                *callback_udata;
 };
 
 #define IPC_SUCCESS "success", 'b', true
@@ -52,7 +51,6 @@ struct ipc
 bool ipc_init(struct ipc *ipc, struct eventloop *loop, ipc_request_callback callback, void *udata);
 void ipc_uninit(struct ipc *ipc);
 bool ipc_client_start_array(struct ipc_client *client, int len);
-bool ipc_client_add_object(struct ipc_client *client, struct json_object *obj);
 void ipc_client_add_error(struct ipc_client *client, const char *desc);
 void ipc_client_add_success(struct ipc_client *client);
 // clang-format on

@@ -155,11 +155,11 @@ wsignal_selection(
 
         close(fd);
 
-        struct sc_buf *data = &ctx.data;
+        struct sc_array_8 *data = &ctx.data;
 
         // Check if data is bigger than configured max size. Shouldn't need to
         // worry about integer overflow, because that is checked in io_read().
-        if (sc_buf_size(data) > (uint64_t)state->config.max_size)
+        if (sc_array_size(data) > (uint64_t)state->config.max_size)
             goto exit;
 
         sha256_final(&data_sha_ctx, data_id);
@@ -168,10 +168,15 @@ wsignal_selection(
         sha256_update(&sha_ctx, data_id, SHA256_BLOCK_SIZE);
 
         bool ret = database_new_mime_type(
-            &state->db, id, mime_type, data_id, data->mem, sc_buf_size(data)
+            &state->db,
+            id,
+            mime_type,
+            data_id,
+            sc_array_data(data),
+            sc_array_size(data)
         );
 
-        sc_buf_term(data);
+        sc_array_term(data);
         if (!ret)
             goto exit;
     }
@@ -313,30 +318,6 @@ request_callback(
 )
 {
     struct state *state = udata;
-
-    switch (req->type)
-    {
-    case IPC_MESSAGE_GET_HISTORY_SIZE:
-    {
-        int64_t size = database_get_history_size(&state->db);
-
-        ipc_client_add_object(
-            client,
-            build_json_object(JUTIL_FLAGS, IPC_SUCCESS, "size", 'i', size, NULL)
-        );
-        break;
-    }
-    case IPC_MESSAGE_SUBSCRIBE:
-    {
-        break;
-    }
-    case IPC_MESSAGE_GET_ENTRY:
-    {
-        break;
-    }
-    default:
-        break;
-    }
 }
 
 int
