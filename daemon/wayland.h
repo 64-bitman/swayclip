@@ -20,10 +20,10 @@
 
 #include "common/event.h"
 #include "common/wayland_ct.h"
-#include "common/xarray.h"
-#include "common/xlist.h"
 #include "config.h"
 #include "protocols/ext-data-control-v1.h"
+#include "xarray.h"
+#include "xlist.h"
 #include <wayland-client.h>
 
 enum wayland_selection_type

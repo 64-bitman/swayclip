@@ -20,6 +20,7 @@ event_lib = static_library(
   'event.c',
   'event.h',
   include_directories: include_directories('.'),
+  dependencies: xstructs_dep,
   link_with: [log_lib]
 )
 
@@ -28,6 +29,7 @@ wayland_ct_lib = static_library(
   'wayland_ct.c',
   'wayland_ct.h',
   include_directories: include_directories('.'),
+  dependencies: xstructs_dep,
   link_with: [log_lib, event_lib]
 )
 
@@ -44,6 +46,7 @@ config_util_lib = static_library(
   'config_util.c',
   'config_util.h',
   include_directories: include_directories('.'),
+  dependencies: xstructs_dep,
   link_with: [log_lib, xdg_lib]
 )
 
@@ -52,6 +55,7 @@ io_lib = static_library(
   'io.c',
   'io.h',
   include_directories: include_directories('.'),
+  dependencies: xstructs_dep,
   link_with: [log_lib]
 )
 
@@ -60,7 +64,7 @@ ipc_ct_lib = static_library(
   'ipc_ct.c',
   'ipc_ct.h',
   include_directories: include_directories('.'),
-  dependencies: json_dep,
+  dependencies: [json_dep, xstructs_dep],
   link_with: [log_lib, event_lib]
 )
 
@@ -69,7 +73,6 @@ json_util_lib = static_library(
   'json_util.c',
   'json_util.h',
   include_directories: include_directories('.'),
-  dependencies: json_dep,
   dependencies: json_dep,
   link_with: [log_lib]
 )

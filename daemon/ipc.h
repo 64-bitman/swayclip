@@ -20,7 +20,7 @@
 
 #include "common/event.h"
 #include "common/ipc_ct.h"
-#include "common/xlist.h"
+#include "xlist.h"
 #include <json.h>
 
 struct ipc_client;

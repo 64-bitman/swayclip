@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "common/xarray.h"
+#include "xarray.h"
 #include <regex.h>
 #include <stdbool.h>
 #include <stdint.h>

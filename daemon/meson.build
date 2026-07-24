@@ -7,7 +7,7 @@ swayclip = executable(
   'ipc.c',
   version_h,
   include_directories: [includes, include_directories('.')],
-  dependencies: [wl_dep, json_dep, sqlite_dep],
+  dependencies: [wl_dep, json_dep, sqlite_dep, xstructs_dep],
   link_with: [
     event_lib,
     log_lib,

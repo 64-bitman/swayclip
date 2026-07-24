@@ -1,6 +1,5 @@
 project(
-  'swayclip',
-  'c',
+  'swayclip', 'c',
   default_options: [
     'c_std=c11',
     'warning_level=2',
@@ -31,6 +30,8 @@ endif
 wl_dep = dependency('wayland-client')
 json_dep = dependency('json-c')
 sqlite_dep = dependency('sqlite3')
+
+xstructs_dep = subproject('xstructs').get_variable('xstructs_dep')
 
 includes = include_directories('.')
 
