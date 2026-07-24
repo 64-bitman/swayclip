@@ -36,9 +36,8 @@ ipc_ct_init(struct ipc_ct *ict, int fd)
 
     ict->fd = fd;
     ict->got_header = false;
-    ict->scm_fd = -1;
 
-    sc_array_init(&ict->write_queue);
+    xarray_init_ipc_write(&ict->write_queue);
 
     return true;
 }
@@ -49,10 +48,10 @@ ipc_ct_init(struct ipc_ct *ict, int fd)
 void
 ipc_ct_uninit(struct ipc_ct *ict)
 {
-    struct ipc_write wr;
+    struct ipc_write *wr;
 
-    sc_array_foreach(&ict->write_queue, wr) free(wr.data);
-    sc_array_term(&ict->write_queue);
+    xarray_foreach(ipc_write, &ict->write_queue, wr) free(wr->data);
+    xarray_uninit_ipc_write(&ict->write_queue);
 
     close(ict->fd);
     json_tokener_free(ict->tokener);
@@ -65,6 +64,10 @@ ipc_ct_uninit(struct ipc_ct *ict)
 bool
 ipc_ct_read(struct ipc_ct *ict, ipc_msg_callback callback, void *udata)
 {
+    (void)ict;
+    (void)callback;
+    (void)udata;
+
     return true;
 }
 
@@ -77,10 +80,10 @@ ipc_ct_write(struct ipc_ct *ict)
 {
     while (true)
     {
-        if (sc_array_size(&ict->write_queue) == 0)
+        if (xarray_len_ipc_write(&ict->write_queue) == 0)
             break;
 
-        struct ipc_write *wr = sc_array_ptr(&ict->write_queue, 0);
+        struct ipc_write *wr = xarray_ptr_ipc_write(&ict->write_queue, 0);
 
         uint32_t off = wr->size - wr->remaining;
         ssize_t  w = write(ict->fd, wr->data + off, wr->remaining);
@@ -104,7 +107,7 @@ ipc_ct_write(struct ipc_ct *ict)
         if (wr->remaining == 0)
         {
             free(wr->data);
-            sc_array_del(&ict->write_queue, 0);
+            xarray_del_ipc_write(&ict->write_queue, 0);
         }
     }
     return true;
@@ -113,7 +116,7 @@ ipc_ct_write(struct ipc_ct *ict)
 bool
 ipc_ct_has_pending_writes(struct ipc_ct *ict)
 {
-    return sc_array_size(&ict->write_queue) > 0;
+    return xarray_len_ipc_write(&ict->write_queue) > 0;
 }
 
 /*
@@ -173,7 +176,7 @@ ipc_ct_write_msg(
     memcpy(wr.data, (uint8_t *)&type, 1);
     memcpy(wr.data + 1, &payload_sz, sizeof(payload_sz));
     memcpy(wr.data + HEADER_SIZE, payload_data, payload_sz);
-    sc_array_add(&ict->write_queue, wr);
+    xarray_add_ipc_write(&ict->write_queue, wr);
 
 exit:
     if (type == IPC_MESSAGE_JSON)

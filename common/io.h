@@ -18,13 +18,10 @@
 
 #pragma once
 
-#include "sc/sc_array.h"
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
+#include "xarray.h"
 #include <time.h>
 
+xarray_create(uint8_t, io, uint32_t, 4096, 2);
 struct io_read
 {
     // Set by caller
@@ -36,7 +33,7 @@ struct io_read
     bool  no_data; // If buffer should be written to "data" each time
 
     // Set by function
-    struct sc_array_8 data;
+    struct xarray_io data;
 };
 
 struct io_write

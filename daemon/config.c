@@ -24,14 +24,13 @@
 static bool
 extract_configured_seats(const char *key, toml_datum_t dat, void *store)
 {
-    struct config               *config = store;
-    struct sc_array_config_seat *arr = &config->configured_seats;
+    struct config             *config = store;
+    struct xarray_config_seat *arr = &config->configured_seats;
 
     if (dat.u.tab.size == 0)
         return true;
 
-    sc_array_set_capacity(arr, dat.u.tab.size);
-    if (sc_array_oom(arr))
+    if (!xarray_set_size_config_seat(arr, dat.u.tab.size))
     {
         log_errerror("Error allocating array for configured seats");
         return false;
@@ -67,7 +66,7 @@ extract_configured_seats(const char *key, toml_datum_t dat, void *store)
         if (!config_extract(t_seat, opts, N_ELEMENTS(opts)))
             return false;
 
-        sc_array_add(arr, seat);
+        xarray_add_config_seat(arr, seat);
     }
 
     return true;
@@ -76,13 +75,12 @@ extract_configured_seats(const char *key, toml_datum_t dat, void *store)
 static bool
 extract_pattern_array(const char *key, toml_datum_t dat, void *store)
 {
-    struct sc_array_regex *arr = store;
+    struct xarray_regex *arr = store;
 
     if (dat.u.arr.size == 0)
         return true;
 
-    sc_array_set_capacity(arr, dat.u.arr.size);
-    if (sc_array_oom(arr))
+    if (!xarray_set_size_regex(arr, dat.u.tab.size))
     {
         log_errerror("Error allocating array for \"%s\"", key);
         return false;
@@ -114,7 +112,7 @@ extract_pattern_array(const char *key, toml_datum_t dat, void *store)
             return false;
         }
 
-        sc_array_add(arr, re);
+        xarray_add_regex(arr, re);
     }
 
     return true;
@@ -134,9 +132,9 @@ config_init(struct config *config, const char *file)
         .persist = true,
     };
 
-    sc_array_init(&config->configured_seats);
-    sc_array_init(&config->allowed_mime_types);
-    sc_array_init(&config->blocked_mime_types);
+    xarray_init_config_seat(&config->configured_seats);
+    xarray_init_regex(&config->allowed_mime_types);
+    xarray_init_regex(&config->blocked_mime_types);
 
     const struct config_option opts[] = {
         CONFIG_INT64_POS("daemon.max_entries", &config->max_entries),
@@ -175,15 +173,15 @@ config_uninit(struct config *config)
 {
     struct config_seat *config_seat;
 
-    sc_array_foreach_ptr(&config->configured_seats, config_seat)
-        free(config_seat->name);
-    sc_array_term(&config->configured_seats);
+    xarray_foreach(config_seat, &config->configured_seats, config_seat)
+        free(config_seat);
+    xarray_uninit_config_seat(&config->configured_seats);
 
-    regex_t *regex;
+    regex_t *reg;
 
-    sc_array_foreach_ptr(&config->allowed_mime_types, regex) regfree(regex);
-    sc_array_term(&config->allowed_mime_types);
+    xarray_foreach(regex, &config->allowed_mime_types, reg) regfree(reg);
+    xarray_uninit_regex(&config->allowed_mime_types);
 
-    sc_array_foreach_ptr(&config->blocked_mime_types, regex) regfree(regex);
-    sc_array_term(&config->blocked_mime_types);
+    xarray_foreach(regex, &config->blocked_mime_types, reg) regfree(reg);
+    xarray_uninit_regex(&config->blocked_mime_types);
 }

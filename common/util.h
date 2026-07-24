@@ -18,34 +18,59 @@
 
 #pragma once
 
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#if !defined(__GNUC__) && !defined(__clang__)
+#    error "GCC or Clang required!"
+#endif
+
+#define UNUSED __attribute__((__unused__))
+#define PRINTFLIKE(n, m) __attribute__((format(printf, n, m)))
+#define SENTINEL __attribute__((sentinel(0)))
+#define typeof __typeof__
+
 #define N_ELEMENTS(arr) ((int)sizeof(arr) / (int)sizeof(*arr))
 
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MAX(a, b)                                                              \
+    ({                                                                         \
+        __typeof__(a) _a = (a);                                                \
+        __typeof__(b) _b = (b);                                                \
+        _a > _b ? _a : _b;                                                     \
+    })
+#define MIN(a, b)                                                              \
+    ({                                                                         \
+        __typeof__(a) _a = (a);                                                \
+        __typeof__(b) _b = (b);                                                \
+        _a < _b ? _a : _b;                                                     \
+    })
 
 #define NUL '\0'
 
 #define STRINGIFY_DIRECT(x) #x
 #define STRINGIFY(x) STRINGIFY_DIRECT(x)
 
-#define clear(ptr)                                                             \
-    do                                                                         \
-    {                                                                          \
-        free(ptr);                                                             \
-        ptr = NULL;                                                            \
-    } while (false)
-
-#ifdef __GNUC__
-#    define UNUSED __attribute__((__unused__))
-#    define PRINTFLIKE(n, m) __attribute__((format(printf, n, m)))
-#    define SENTINEL __attribute__((sentinel(0)))
-#else
-#    define UNUSED
-#    define PRINTFLIKE(n, m)
-#    define SENTINEL
-#endif
 typedef unsigned int uint;
 
-// clang-format off
-char *xstrdup_printf(const char *fmt, ...) PRINTFLIKE(1, 2);
-// clang-format on
+static inline char *
+xstrdup_printf(const char *fmt, ...)
+{
+    char   *str;
+    va_list ap;
+    int     len;
+
+    va_start(ap, fmt);
+    len = vsnprintf(NULL, 0, fmt, ap);
+    va_end(ap);
+
+    str = malloc(len + 1);
+    if (str == NULL)
+        return NULL;
+
+    va_start(ap, fmt);
+    vsnprintf(str, len + 1, fmt, ap);
+    va_end(ap);
+
+    return str;
+}

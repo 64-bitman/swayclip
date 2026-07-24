@@ -54,11 +54,12 @@ struct seat
     struct selection sel_regular;
     struct selection sel_primary;
 
-    struct sc_array_astr mime_types;
-    bool                 blocked;
+    struct xarray_mime_type mime_types;
+    bool                    blocked;
 
-    struct sc_list link;
+    struct xlist_seat link;
 };
+xlist_define(seat, struct seat, link);
 
 static void wayland_del_seat(struct seat *seat);
 
@@ -174,10 +175,11 @@ selection_set(struct selection *sel)
  * Check if "target" matches any of the regexes in arr.
  */
 bool
-match_regex_array(struct sc_array_regex *arr, const char *target)
+match_regex_array(struct xarray_regex *arr, const char *target)
 {
     regex_t *reg;
-    sc_array_foreach_ptr(arr, reg)
+
+    xarray_foreach(regex, arr, reg)
     {
         if (regexec(reg, target, 0, NULL, 0) == 0)
             return true;
@@ -196,7 +198,7 @@ data_offer_event_offer(
     struct config *config = seat->wayland->config;
 
     // Do not save entry if mime type is configured to be blocked.
-    if (sc_array_size(&config->blocked_mime_types) > 0 &&
+    if (xarray_len_regex(&config->blocked_mime_types) > 0 &&
         match_regex_array(&config->blocked_mime_types, mime_type))
         seat->blocked = true;
 
@@ -204,7 +206,7 @@ data_offer_event_offer(
         return;
 
     // Check if mime type is allowed to be saved
-    if (sc_array_size(&config->allowed_mime_types) > 0 &&
+    if (xarray_len_regex(&config->allowed_mime_types) > 0 &&
         !match_regex_array(&config->allowed_mime_types, mime_type))
         return;
 
@@ -212,7 +214,7 @@ data_offer_event_offer(
 
     if (str == NULL)
         return;
-    sc_array_add(&seat->mime_types, str);
+    xarray_add_mime_type(&seat->mime_types, str);
 }
 
 static const struct ext_data_control_offer_v1_listener data_offer_listener = {
@@ -223,8 +225,8 @@ static void
 seat_clear_mime_types(struct seat *seat)
 {
     char *mime_type;
-    sc_array_foreach(&seat->mime_types, mime_type) free(mime_type);
-    sc_array_term(&seat->mime_types);
+    xarray_foreach_val(mime_type, &seat->mime_types, mime_type) free(mime_type);
+    xarray_uninit_mime_type(&seat->mime_types);
 }
 
 static void
@@ -451,17 +453,18 @@ wayland_seat_is_configured(
     struct wayland *wayland, const char *name, bool *regular, bool *primary
 )
 {
-    struct config      *config = wayland->config;
-    struct config_seat *config_seat;
+    struct config *config = wayland->config;
 
-    if (sc_array_size(&config->configured_seats) == 0)
+    if (xarray_len_config_seat(&config->configured_seats) == 0)
     {
         *regular = config->regular;
         *primary = config->primary;
         return true;
     }
 
-    sc_array_foreach_ptr(&config->configured_seats, config_seat)
+    struct config_seat *config_seat;
+
+    xarray_foreach(config_seat, &config->configured_seats, config_seat)
     {
         if (config_seat->name == NULL || strcmp(config_seat->name, name) == 0)
         {
@@ -534,10 +537,9 @@ wayland_add_seat(
 
     wl_seat_add_listener(proxy, &seat_listener, seat);
 
-    sc_array_init(&seat->mime_types);
+    xarray_init_mime_type(&seat->mime_types);
 
-    sc_list_init(&seat->link);
-    sc_list_add_head(&wayland->seats, &seat->link);
+    xlist_insert_after_seat(&wayland->seats, seat);
 
     return true;
 }
@@ -556,7 +558,7 @@ wayland_del_seat(struct seat *seat)
 
     seat_clear_mime_types(seat);
 
-    sc_list_del(&seat->link);
+    xlist_unlink_seat(seat);
     free(seat);
 }
 
@@ -603,12 +605,11 @@ registry_event_global_remove(
 )
 {
     struct wayland *wayland = udata;
-    struct sc_list *it, *tmp;
 
-    sc_list_foreach_safe(&wayland->seats, tmp, it)
+    struct seat *seat;
+
+    xlist_foreach_safe(seat, &wayland->seats, seat)
     {
-        struct seat *seat = sc_list_entry(it, struct seat, link);
-
         if (seat->global_name == name)
         {
             wayland_del_seat(seat);
@@ -639,7 +640,7 @@ wayland_init(
         wayland->wct.registry, &registry_listener, wayland
     );
 
-    sc_list_init(&wayland->seats);
+    xlist_init_seat(&wayland->seats);
     wl_display_roundtrip(wayland->wct.display);
 
     if (wayland->ext_data_mgr == NULL)
@@ -657,14 +658,9 @@ wayland_init(
 void
 wayland_uninit(struct wayland *wayland)
 {
-    struct sc_list *it, *tmp;
+    struct seat *seat;
 
-    sc_list_foreach_safe(&wayland->seats, tmp, it)
-    {
-        struct seat *seat = sc_list_entry(it, struct seat, link);
-
-        wayland_del_seat(seat);
-    }
+    xlist_foreach_safe(seat, &wayland->seats, seat) { wayland_del_seat(seat); }
 
     if (wayland->ext_data_mgr != NULL)
         ext_data_control_manager_v1_destroy(wayland->ext_data_mgr);
@@ -711,12 +707,10 @@ wayland_get_offer_fd(
 void
 wayland_set(struct wayland *wayland, struct selection *ignore)
 {
-    struct sc_list *it;
+    struct seat *seat;
 
-    sc_list_foreach(&wayland->seats, it)
+    xlist_foreach(seat, &wayland->seats, seat)
     {
-        struct seat *seat = sc_list_entry(it, struct seat, link);
-
         if (seat->enabled)
             seat_set(seat, ignore);
     }

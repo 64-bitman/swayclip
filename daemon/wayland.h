@@ -19,9 +19,9 @@
 #pragma once
 
 #include "common/event.h"
-#include "common/sc/sc_array.h"
-#include "common/sc/sc_list.h"
 #include "common/wayland_ct.h"
+#include "common/xarray.h"
+#include "common/xlist.h"
 #include "config.h"
 #include "protocols/ext-data-control-v1.h"
 #include <wayland-client.h>
@@ -36,13 +36,15 @@ struct wayland;
 struct seat;
 struct selection;
 
+xarray_create(char *, mime_type, uint32_t, 10, 2);
+
 struct wayland_signals
 {
     // If "offer" is NULL, selection is cleared.
     struct
     {
         // clang-format off
-        void (*callback)(struct selection *sel, struct ext_data_control_offer_v1 *offer, const struct sc_array_astr *mime_types, void *udata);
+        void (*callback)(struct selection *sel, struct ext_data_control_offer_v1 *offer, struct xarray_mime_type *mime_types, void *udata);
         // clang-format on
         void *callback_udata;
     } selection;
@@ -75,13 +77,15 @@ struct wayland_signals
     } can_set;
 };
 
+xlist_declare(seat);
+
 struct wayland
 {
     struct wayland_ct wct;
     struct config    *config;
 
     struct ext_data_control_manager_v1 *ext_data_mgr;
-    struct sc_list                      seats;
+    struct xlist_seat                   seats;
 
     struct wayland_signals signals;
 };

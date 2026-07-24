@@ -32,8 +32,9 @@ struct eventsource
     eventsource_callback callback;
     void                *callback_udata;
 
-    struct sc_list link;
+    struct xlist_eventsource link;
 };
+xlist_define(eventsource, struct eventsource, link);
 
 struct eventprepare
 {
@@ -42,8 +43,9 @@ struct eventprepare
     eventprepare_callback callback;
     void                 *callback_udata;
 
-    struct sc_list link;
+    struct xlist_eventprepare link;
 };
+xlist_define(eventprepare, struct eventprepare, link);
 
 bool
 eventloop_init(struct eventloop *loop)
@@ -77,9 +79,9 @@ eventloop_init(struct eventloop *loop)
     loop->prepare_id = 0;
     pthread_mutex_init(&loop->stop_mut, NULL);
 
-    sc_list_init(&loop->sources);
-    sc_list_init(&loop->deleted_sources);
-    sc_list_init(&loop->prepares);
+    xlist_init_eventsource(&loop->sources);
+    xlist_init_eventsource(&loop->deleted_sources);
+    xlist_init_eventprepare(&loop->prepares);
     return true;
 }
 
@@ -90,37 +92,35 @@ eventsource_del(struct eventsource *source, struct eventloop *loop)
         if (errno != EBADF)
             log_errwarn("Error deleting fd %d from epoll", source->fd);
 
-    sc_list_del(&source->link);
+    xlist_unlink_eventsource(source);
     free(source);
 }
 
 static void
 eventprepare_del(struct eventprepare *prepare)
 {
-    sc_list_del(&prepare->link);
+    xlist_unlink_eventprepare(prepare);
     free(prepare);
 }
 
 void
 eventloop_uninit(struct eventloop *loop)
 {
-    if (!sc_list_is_empty(&loop->sources))
+    if (!xlist_empty_eventsource(&loop->sources))
     {
         log_warn("Event loop still has sources active");
 
-        struct sc_list *it, *tmp;
-
-        sc_list_foreach_safe(&loop->sources, tmp, it)
-            eventsource_del(sc_list_entry(it, struct eventsource, link), loop);
+        struct eventsource *source;
+        xlist_foreach_safe(eventsource, &loop->sources, source)
+            eventsource_del(source, loop);
     }
-    if (!sc_list_is_empty(&loop->prepares))
+    if (!xlist_empty_eventprepare(&loop->prepares))
     {
         log_warn("Event loop still has prepare sources active");
 
-        struct sc_list *it, *tmp;
-
-        sc_list_foreach_safe(&loop->prepares, tmp, it)
-            eventprepare_del(sc_list_entry(it, struct eventprepare, link));
+        struct eventprepare *prepare;
+        xlist_foreach_safe(eventprepare, &loop->prepares, prepare)
+            eventprepare_del(prepare);
     }
 
     close(loop->epoll);
@@ -149,13 +149,10 @@ eventloop_run(struct eventloop *loop)
         int n_high = 0;
         int n_norm = 0;
 
-        struct sc_list *it, *tmp;
+        struct eventprepare *prepare;
 
-        sc_list_foreach_safe(&loop->prepares, tmp, it)
+        xlist_foreach_safe(eventprepare, &loop->prepares, prepare)
         {
-            struct eventprepare *prepare =
-                sc_list_entry(it, struct eventprepare, link);
-
             if (prepare->callback(prepare->callback_udata))
                 eventprepare_del(prepare);
         }
@@ -201,16 +198,18 @@ eventloop_run(struct eventloop *loop)
                         source->fd, bucket[k].events, source->callback_udata
                     ))
                 {
-                    sc_list_del(&source->link);
-                    sc_list_add_head(&loop->deleted_sources, &source->link);
+                    xlist_unlink_eventsource(source);
+                    xlist_insert_after_eventsource(
+                        &loop->deleted_sources, source
+                    );
                 }
             }
         }
 
-        sc_list_foreach_safe(&loop->deleted_sources, tmp, it)
+        struct eventsource *source;
+
+        xlist_foreach_safe(eventsource, &loop->deleted_sources, source)
         {
-            struct eventsource *source =
-                sc_list_entry(it, struct eventsource, link);
             eventsource_del(source, loop);
         }
 
@@ -282,22 +281,18 @@ eventloop_add(
     source->callback = callback;
     source->callback_udata = udata;
 
-    sc_list_init(&source->link);
-    sc_list_add_head(&loop->sources, &source->link);
+    xlist_insert_after_eventsource(&loop->sources, source);
 
     return true;
 }
 
 static struct eventsource *
-eventloop_find(struct sc_list *list, int fd)
+eventloop_find(struct xlist_eventsource *list, int fd)
 {
-    struct sc_list *it;
+    struct eventsource *source;
 
-    sc_list_foreach(list, it)
+    xlist_foreach(eventsource, list, source)
     {
-        struct eventsource *source =
-            sc_list_entry(it, struct eventsource, link);
-
         if (source->fd == fd)
             return source;
     }
@@ -328,8 +323,8 @@ eventloop_del(struct eventloop *loop, int fd)
 
     if (source == NULL)
         return false;
-    sc_list_del(&source->link);
-    sc_list_add_head(&loop->deleted_sources, &source->link);
+    xlist_unlink_eventsource(source);
+    xlist_insert_after_eventsource(&loop->deleted_sources, source);
     return true;
 }
 
@@ -379,8 +374,7 @@ eventloop_add_prepare(
     prepare->callback = callback;
     prepare->callback_udata = udata;
 
-    sc_list_init(&prepare->link);
-    sc_list_add_head(&loop->prepares, &prepare->link);
+    xlist_insert_after_eventprepare(&loop->prepares, prepare);
 
     return prepare->id;
 }
@@ -391,16 +385,13 @@ eventloop_add_prepare(
 bool
 eventloop_del_prepare(struct eventloop *loop, uint id)
 {
-    struct sc_list *it;
+    struct eventprepare *prepare;
 
-    sc_list_foreach(&loop->prepares, it)
+    xlist_foreach_safe(eventprepare, &loop->prepares, prepare)
     {
-        struct eventprepare *prepare =
-            sc_list_entry(it, struct eventprepare, link);
-
         if (prepare->id == id)
         {
-            sc_list_del(it);
+            xlist_unlink_eventprepare(prepare);
             free(prepare);
             return true;
         }

@@ -18,12 +18,12 @@
 
 #pragma once
 
-#include "common/sc/sc_array.h"
+#include "common/xarray.h"
+#include <regex.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <regex.h>
 
-sc_array_def(regex_t, regex);
+xarray_create(regex_t, regex, uint32_t, 4, 1.5);
 
 struct config_seat
 {
@@ -31,7 +31,7 @@ struct config_seat
     bool  regular;
     bool  primary;
 };
-sc_array_def(struct config_seat, config_seat);
+xarray_create(struct config_seat, config_seat, uint32_t, 4, 1.5);
 
 struct config
 {
@@ -51,15 +51,15 @@ struct config
 
     // Array of seats that the user has configured. If empty then allow any
     // seat.
-    struct sc_array_config_seat configured_seats;
+    struct xarray_config_seat configured_seats;
 
     // Array of regex_t of mime types that are allowed to be saved. If empty,
     // then assume all mime types.
-    struct sc_array_regex allowed_mime_types;
+    struct xarray_regex allowed_mime_types;
 
     // Array of regex_t of mime types that will make the selection event be
     // completely ignored.
-    struct sc_array_regex blocked_mime_types;
+    struct xarray_regex blocked_mime_types;
 };
 
 // clang-format off

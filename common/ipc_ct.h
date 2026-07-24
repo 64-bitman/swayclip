@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "sc/sc_array.h"
+#include "xarray.h"
 #include <json.h>
 
 enum ipc_message_type
@@ -53,7 +53,7 @@ struct ipc_write
     uint32_t remaining;
 };
 
-sc_array_def(struct ipc_write, ipc_write);
+xarray_create(struct ipc_write, ipc_write, uint32_t, 32, 2);
 
 struct ipc_ct
 {
@@ -61,13 +61,13 @@ struct ipc_ct
 
     bool     got_header;
     uint32_t remaining;
-    int      scm_fd; // -1 if not set
+    uint32_t size;
 
     struct json_tokener *tokener;
 
     uint8_t buf[4096];
 
-    struct sc_array_ipc_write write_queue;
+    struct xarray_ipc_write write_queue;
 };
 
 typedef void (*ipc_msg_callback)(struct ipc_message *msg, void *udata);

@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "sc/sc_list.h"
+#include "xlist.h"
 #include <pthread.h>
 #include <sys/epoll.h>
 
@@ -26,7 +26,7 @@
 typedef bool (*eventsource_callback)(int fd, int events, void *udata);
 
 // Return true to remove source. Do not remove other prepare sources in the
-// callback (including source itself).
+// callback (including source itself, other than returning true).
 typedef bool (*eventprepare_callback)(void *udata);
 
 enum event_priority
@@ -34,6 +34,9 @@ enum event_priority
     EVENT_PRIORITY_HIGH,
     EVENT_PRIORITY_NORMAL
 };
+
+xlist_declare(eventsource);
+xlist_declare(eventprepare);
 
 struct eventloop
 {
@@ -43,11 +46,11 @@ struct eventloop
     int event_fd; // Used to wakeup loop
     int epoll;    // For normal priority sources
 
-    struct sc_list sources;
-    struct sc_list deleted_sources;
+    struct xlist_eventsource sources;
+    struct xlist_eventsource deleted_sources;
 
-    uint prepare_id;
-    struct sc_list prepares;
+    uint                      prepare_id;
+    struct xlist_eventprepare prepares;
 };
 
 // clang-format off

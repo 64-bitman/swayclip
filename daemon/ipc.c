@@ -37,8 +37,9 @@ struct ipc_client
     struct ipc   *ipc;
     struct ipc_ct ict;
 
-    struct sc_list link;
+    struct xlist_ipc_client link;
 };
+xlist_define(ipc_client, struct ipc_client, link);
 
 static void ipc_client_free(struct ipc_client *client);
 
@@ -115,8 +116,7 @@ ipc_add_client(struct ipc *ipc, int client_fd)
     }
 
     client->ipc = ipc;
-    sc_list_init(&client->link);
-    sc_list_add_head(&ipc->connections, &client->link);
+    xlist_insert_after_ipc_client(&ipc->connections, client);
 
     log_debug("New IPC client");
 
@@ -131,7 +131,7 @@ ipc_client_free(struct ipc_client *client)
 
     log_debug("IPC client closed");
 
-    sc_list_del(&client->link);
+    xlist_unlink_ipc_client(client);
     free(client);
 }
 
@@ -270,7 +270,7 @@ ipc_init(
     ipc->path = path;
     ipc->lock_path = lock_path;
     ipc->fd = fd;
-    sc_list_init(&ipc->connections);
+    xlist_init_ipc_client(&ipc->connections);
 
     ipc->callback = callback;
     ipc->callback_udata = udata;
@@ -291,11 +291,11 @@ ipc_uninit(struct ipc *ipc)
 {
     eventloop_del(ipc->loop, ipc->fd);
 
-    struct sc_list *it, *tmp;
+    struct ipc_client *client;
 
-    sc_list_foreach_safe(&ipc->connections, tmp, it)
+    xlist_foreach_safe(ipc_client, &ipc->connections, client)
     {
-        ipc_client_free(sc_list_entry(it, struct ipc_client, link));
+        ipc_client_free(client);
     }
 
     close(ipc->fd);
@@ -311,12 +311,10 @@ ipc_emit_event(
     struct ipc *ipc, enum ipc_message_type type, struct json_object *obj
 )
 {
-    struct sc_list *it;
+    struct ipc_client *client;
 
-    sc_list_foreach(&ipc->connections, it)
+    xlist_foreach(ipc_client, &ipc->connections, client)
     {
-        struct ipc_client *client = sc_list_entry(it, struct ipc_client, link);
-
         ipc_ct_write_msg(&client->ict, type, (union ipc_payload){.json = obj});
     }
     json_object_put(obj);

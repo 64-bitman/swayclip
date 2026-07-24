@@ -20,7 +20,7 @@
 
 #include "common/event.h"
 #include "common/ipc_ct.h"
-#include "common/sc/sc_list.h"
+#include "common/xlist.h"
 #include <json.h>
 
 struct ipc_client;
@@ -28,6 +28,8 @@ struct ipc_client;
 // clang-format off
 typedef void (*ipc_request_callback)(struct ipc_client *client, struct ipc_message *req, void *udata);
 // clang-format on
+
+xlist_declare(ipc_client);
 
 struct ipc
 {
@@ -39,7 +41,7 @@ struct ipc
     int fd;
     int lock_fd;
 
-    struct sc_list connections;
+    struct xlist_ipc_client connections;
 
     ipc_request_callback callback;
     void                *callback_udata;

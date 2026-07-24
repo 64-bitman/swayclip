@@ -18,7 +18,6 @@
 
 #include "common/event.h"
 #include "common/io.h"
-#include "common/json_util.h"
 #include "common/log.h"
 #include "common/sha256/sha256.h"
 #include "common/version.h"
@@ -102,13 +101,13 @@ static void
 wsignal_selection(
     struct selection                 *sel,
     struct ext_data_control_offer_v1 *offer,
-    const struct sc_array_astr       *mime_types,
+    struct xarray_mime_type          *mime_types,
     void                             *udata
 )
 {
     struct state *state = udata;
 
-    if (sc_array_size(mime_types) == 0)
+    if (xarray_len_mime_type(mime_types) == 0)
         return;
 
     if (!database_do_transaction(&state->db, DB_TRANSACTION_IMMEDIATE))
@@ -124,10 +123,10 @@ wsignal_selection(
 
     sha256_init(&sha_ctx);
 
-    const char *mime_type;
-    uint8_t     data_id[SHA256_BLOCK_SIZE];
+    char   *mime_type;
+    uint8_t data_id[SHA256_BLOCK_SIZE];
 
-    sc_array_foreach(mime_types, mime_type)
+    xarray_foreach_val(mime_type, mime_types, mime_type)
     {
         int fd = wayland_get_offer_fd(&state->wayland, offer, mime_type);
 
@@ -155,11 +154,11 @@ wsignal_selection(
 
         close(fd);
 
-        struct sc_array_8 *data = &ctx.data;
+        struct xarray_io *data = &ctx.data;
 
         // Check if data is bigger than configured max size. Shouldn't need to
         // worry about integer overflow, because that is checked in io_read().
-        if (sc_array_size(data) > (uint64_t)state->config.max_size)
+        if (xarray_len_io(data) > (uint64_t)state->config.max_size)
             goto exit;
 
         sha256_final(&data_sha_ctx, data_id);
@@ -172,11 +171,11 @@ wsignal_selection(
             id,
             mime_type,
             data_id,
-            sc_array_data(data),
-            sc_array_size(data)
+            xarray_data_io(data),
+            xarray_len_io(data)
         );
 
-        sc_array_term(data);
+        xarray_uninit_io(data);
         if (!ret)
             goto exit;
     }
@@ -271,6 +270,7 @@ wsignal_send(const char *mime_type, int fd, void *udata)
         .callback_udata = callback_udata
     };
 
+    // Maybe make this asynchronous? Not sure if worth it...
     (void)io_write(&ctx, 3000);
 
     sqlite3_blob_close(blob);
@@ -318,6 +318,10 @@ request_callback(
 )
 {
     struct state *state = udata;
+
+    (void)client;
+    (void)req;
+    (void)state;
 }
 
 int

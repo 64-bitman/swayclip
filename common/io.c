@@ -66,7 +66,7 @@ io_read(struct io_read *ctx, int timeout)
 {
     struct pollfd pfd = {.fd = ctx->fd, .events = POLLIN};
 
-    sc_array_init(&ctx->data);
+    xarray_init_io(&ctx->data);
 
     while (true)
     {
@@ -87,7 +87,7 @@ io_read(struct io_read *ctx, int timeout)
         if (!(pfd.revents & POLLIN) &&
             pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
         {
-            if (sc_array_size(&ctx->data) == 0)
+            if (xarray_len_io(&ctx->data) == 0)
                 goto fail;
             break;
         }
@@ -108,8 +108,7 @@ io_read(struct io_read *ctx, int timeout)
         {
             if (!ctx->no_data)
             {
-                sc_array_concat(&ctx->data, ctx->buf, r);
-                if (sc_array_oom(&ctx->data))
+                if (!xarray_concat_io(&ctx->data, ctx->buf, r))
                 {
                     log_errerror("Out of memory!");
                     goto fail;
@@ -124,7 +123,7 @@ io_read(struct io_read *ctx, int timeout)
 
     return true;
 fail:
-    sc_array_term(&ctx->data);
+    xarray_uninit_io(&ctx->data);
     return false;
 }
 
