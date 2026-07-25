@@ -25,8 +25,7 @@
 #include <unistd.h>
 
 /*
- * Get time in nanoseconds depending on clock ID. I guess this is IO related? I
- * dont fucking know...
+ * Get time in nanoseconds depending on clock ID. Not IO related but uhh..
  */
 int64_t
 get_time_ns(clockid_t id)
@@ -187,6 +186,136 @@ io_write(struct io_write *ctx, int timeout)
         len -= w;
     }
     return true;
+}
+
+/*
+ * Receive "len" bytes from "fd" into "buf", handling EINTR. If EAGAIN or
+ * EWOULDBLOCK is returned, then "poll" is set to true and -1 is returned, then
+ * If the payload has ancillary data, then place the first fd in the control
+ * message in "scm_fd" (only if its value is -1 and non-NULL). If "*scm_fd" is
+ * not -1 or "scm_fd" is NULL, then any control message is ignored/truncated.
+ * Return number of bytes read, 0 on EOF, or -1 on fatal error.
+ */
+ssize_t
+io_recv(int fd, uint8_t *buf, size_t len, int *scm_fd, bool *poll)
+{
+    bool need_scm = scm_fd != NULL && *scm_fd == -1;
+
+    // https://man7.org/tlpi/code/online/dist/sockets/scm_rights_recv.c.html
+    union
+    {
+        char           buf[CMSG_SPACE(sizeof(int))];
+        struct cmsghdr align;
+    } cmsg = {0};
+    struct iovec  iov = {.iov_base = buf, .iov_len = len};
+    struct msghdr msgh = {0};
+
+    msgh.msg_iov = &iov;
+    msgh.msg_iovlen = 1;
+
+    if (need_scm)
+    {
+        msgh.msg_control = cmsg.buf;
+        msgh.msg_controllen = sizeof(cmsg.buf);
+    }
+
+    ssize_t r;
+
+    while (true)
+    {
+        r = recvmsg(fd, &msgh, 0);
+
+        if (r == -1)
+        {
+            if (errno == EINTR)
+                continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+                *poll = true;
+                return -1;
+            }
+            log_errerror("Error receiving message from fd %d", fd);
+            return -1;
+        }
+        else if (r == 0)
+            // EOF receiveda
+            return 0;
+        break;
+    }
+
+    if (need_scm && msgh.msg_flags & MSG_TRUNC)
+        // Bad client
+        log_warn("Received socket control message truncated?");
+
+    struct cmsghdr *chdr = *scm_fd == -1 ? CMSG_FIRSTHDR(&msgh) : NULL;
+
+    if (need_scm)
+    {
+        if (chdr->cmsg_len != CMSG_LEN(sizeof(int)) ||
+            chdr->cmsg_level != SOL_SOCKET || chdr->cmsg_type != SCM_RIGHTS)
+        {
+            log_warn("Received socket control message is invalid");
+            return r;
+        }
+
+        memcpy(scm_fd, CMSG_DATA(chdr), sizeof(*scm_fd));
+    }
+
+    return r;
+}
+
+ssize_t
+io_send(int fd, uint8_t *buf, size_t len, int scm_fd, bool *poll)
+{
+    union
+    {
+        char           buf[CMSG_SPACE(sizeof(int))];
+        struct cmsghdr align;
+    } cmsg = {0};
+    struct iovec  iov = {.iov_base = buf, .iov_len = len};
+    struct msghdr msgh = {0};
+
+    msgh.msg_iov = &iov;
+    msgh.msg_iovlen = 1;
+
+    if (scm_fd != -1)
+    {
+        msgh.msg_control = cmsg.buf;
+        msgh.msg_controllen = sizeof(cmsg.buf);
+
+        struct cmsghdr *chdr = CMSG_FIRSTHDR(&msgh);
+
+        chdr->cmsg_len = CMSG_LEN(sizeof(int));
+        chdr->cmsg_level = SOL_SOCKET;
+        chdr->cmsg_type = SCM_RIGHTS;
+        memcpy(CMSG_DATA(chdr), &scm_fd, sizeof(scm_fd));
+    }
+
+    ssize_t w;
+
+    while (true)
+    {
+        w = sendmsg(fd, &msgh, 0);
+
+        if (w == -1)
+        {
+            if (errno == EINTR)
+                continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+                *poll = true;
+                return -1;
+            }
+            log_errerror("Error sending message to fd %d", fd);
+            return false;
+        }
+        else if (w == 0)
+            // I guess exit?
+            return -1;
+        break;
+    }
+
+    return w;
 }
 
 /*

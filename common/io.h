@@ -53,6 +53,8 @@ int64_t get_time_ns(clockid_t id);
 bool set_fd_nonblocking(int fd);
 bool io_read(struct io_read *ctx, int timeout);
 bool io_write(struct io_write *ctx, int timeout);
+ssize_t io_recv(int fd, uint8_t *buf, size_t len, int *scm_fd, bool *poll);
+ssize_t io_send(int buf, uint8_t *bf, size_t len, int scm_fd, bool *poll);
 int create_lock(const char *path, int *lock_fd);
 pid_t lock_is_locked(const char *path);
 // clang-format on

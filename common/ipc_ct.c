@@ -17,12 +17,15 @@
  */
 
 #include "ipc_ct.h"
+#include "io.h"
 #include "log.h"
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
-#define HEADER_SIZE ((ssize_t)(1 + sizeof(uint32_t)))
+xarray_create(uint8_t, write, uint32_t, 128, 2.0);
 
 /*
  * "fd" should be non blocking
@@ -35,7 +38,8 @@ ipc_ct_init(struct ipc_ct *ict, int fd)
         return false;
 
     ict->fd = fd;
-    ict->got_header = false;
+    ict->pending_size = 0;
+    ict->scm_fd = -1;
 
     xarray_init_ipc_write(&ict->write_queue);
 
@@ -52,6 +56,8 @@ ipc_ct_uninit(struct ipc_ct *ict)
 
     xarray_foreach(ipc_write, &ict->write_queue, wr) free(wr->data);
     xarray_uninit_ipc_write(&ict->write_queue);
+    if (ict->scm_fd != -1)
+        close(ict->scm_fd);
 
     close(ict->fd);
     json_tokener_free(ict->tokener);
@@ -59,14 +65,110 @@ ipc_ct_uninit(struct ipc_ct *ict)
 
 /*
  * Receive from the IPC socket, and return true on success or false on fatal
- * error.
+ * error. Callbacks "callback" for each message received.
  */
 bool
-ipc_ct_read(struct ipc_ct *ict, ipc_msg_callback callback, void *udata)
+ipc_ct_read(
+    struct ipc_ct *ict, bool need_scm, ipc_msg_callback callback, void *udata
+)
 {
-    (void)ict;
-    (void)callback;
-    (void)udata;
+    while (true)
+    {
+        uint8_t *buf = ict->buf;
+        bool     recv_header = false;
+
+        if (ict->pending_size == 0)
+        {
+            // Check if there is at minimum the header size pending in the
+            // socket buffer.
+            int pending;
+
+            if (ioctl(ict->fd, FIONREAD, &pending) == -1)
+            {
+                log_errerror("Error querying pending bytes in IPC connection");
+                return false;
+            }
+            if (pending < (int)sizeof(uint32_t))
+                return true;
+
+            buf = (uint8_t *)&ict->pending_size;
+            recv_header = true;
+            ict->pending_size = sizeof(uint32_t);
+        }
+
+        ssize_t r;
+        bool    poll = false;
+        int    *scm_ptr = need_scm ? &ict->scm_fd : NULL;
+
+        r = io_recv(ict->fd, buf, ict->pending_size, scm_ptr, &poll);
+        if (r == -1)
+        {
+            // EAGAIN or EWOULDBLOCK shouldn't happen
+            if (poll)
+                log_warn("io_recv() returned EAGAIN/EWOULDBLOCK?");
+            return false;
+        }
+        if (recv_header)
+        {
+            if (r != sizeof(uint32_t)) // Shouldn't happen
+            {
+                log_error("Error reading IPC message header");
+                return false;
+            }
+            // Restrict message size to 64 KiB
+            if (ict->pending_size > 65536)
+            {
+                // I guess just kill the connection?
+                log_error("IPC message size is larger than 64 KiB");
+                return false;
+            }
+            continue;
+        }
+
+        ict->pending_size -= r;
+
+        enum json_tokener_error j_err;
+        struct json_object     *msg =
+            json_tokener_parse_ex(ict->tokener, (char *)ict->buf, r);
+
+        j_err = json_tokener_get_error(ict->tokener);
+        if (j_err == json_tokener_success)
+        {
+            struct ipc_message imsg = {
+                .aux_data = NULL, .aux_data_len = 0, .payload = msg
+            };
+            int scm_fd = ict->scm_fd;
+
+            ict->scm_fd = -1;
+            if (scm_fd != -1)
+            {
+                struct stat st;
+
+                if (fstat(scm_fd, &st) != -1)
+                {
+                    imsg.aux_data = mmap(
+                        NULL, st.st_size, PROT_READ, MAP_SHARED, scm_fd, 0
+                    );
+                    if (imsg.aux_data == MAP_FAILED || imsg.aux_data == NULL)
+                    {
+                        if (imsg.aux_data == MAP_FAILED)
+                            log_errerror("Error mmapping IPC message fd");
+                        imsg.aux_data = NULL;
+                    }
+                    else
+                        imsg.aux_data_len = st.st_size;
+                }
+                else
+                    log_warn("Error querying size of IPC message fd");
+                close(scm_fd);
+            }
+
+            callback(&imsg, udata);
+            json_object_put(msg);
+            if (imsg.aux_data != NULL)
+                munmap(imsg.aux_data, imsg.aux_data_len);
+        }
+    }
 
     return true;
 }
@@ -86,18 +188,19 @@ ipc_ct_write(struct ipc_ct *ict)
         struct ipc_write *wr = xarray_ptr_ipc_write(&ict->write_queue, 0);
 
         uint32_t off = wr->size - wr->remaining;
-        ssize_t  w = write(ict->fd, wr->data + off, wr->remaining);
+        bool     poll = false;
+        ssize_t  w =
+            io_send(ict->fd, wr->data + off, wr->remaining, wr->scm_fd, &poll);
 
         if (w == -1)
         {
-            if (errno == EINTR)
-                continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            if (poll)
                 // Poll until socket is writable again
                 return true;
             log_error("Error writing to IPC connection");
             return false;
         }
+        wr->scm_fd = -1; // Don't want to send fd mutliple times
         if (w == 0)
             // Not sure if this can happen, just return to poll I guess...
             return true;
@@ -120,67 +223,50 @@ ipc_ct_has_pending_writes(struct ipc_ct *ict)
 }
 
 /*
- * Note that ownership of "payload" is always taken. If "payload" is invalid,
- * nothing is done.
+ * Note that ownership of "payload" and "scm_fd" (if not -1) is always taken. If
+ * "payload" is invalid, nothing is done. If "scm_fd" is not -1, then it sent
+ * along the message over the socket using SCM_RIGHTS.
  */
 void
-ipc_ct_write_msg(
-    struct ipc_ct *ict, enum ipc_message_type type, union ipc_payload payload
-)
+ipc_ct_write_msg(struct ipc_ct *ict, struct json_object *msg, int scm_fd)
 {
+    size_t      len;
+    const char *str =
+        json_object_to_json_string_length(msg, JSON_C_TO_STRING_PLAIN, &len);
 
-    if ((type == IPC_MESSAGE_BLOB && payload.blob.data == NULL) ||
-        (type == IPC_MESSAGE_JSON && payload.json == NULL))
-        return;
-
-    uint8_t *payload_data;
-    uint32_t payload_sz;
-
-    if (type == IPC_MESSAGE_BLOB)
+    if (len > (size_t)UINT32_MAX)
     {
-        payload_data = payload.blob.data;
-        payload_sz = payload.blob.size;
-    }
-    else
-    {
-        struct json_object *msg = payload.json;
-
-        size_t      len;
-        const char *str = json_object_to_json_string_length(
-            msg, JSON_C_TO_STRING_PLAIN, &len
-        );
-
-        if (len > (size_t)UINT32_MAX)
-        {
-            json_object_put(msg);
-            return;
-        }
-
-        payload_data = (uint8_t *)str;
-        payload_sz = (uint32_t)len;
+        log_error("IPC message too large to be sent");
+        goto fail;
     }
 
-    struct ipc_write wr = {
-        .size = HEADER_SIZE + payload_sz,
-        .remaining = wr.size,
-    };
+    struct xarray_write buf;
+    uint32_t            l = len;
 
-    wr.data = malloc(wr.size);
+    xarray_init_write(&buf);
 
-    if (wr.data == NULL)
+    if (!xarray_set_size_write(&buf, sizeof(l) + len))
+        goto fail;
+
+    // Should never fail
+    assert(xarray_concat_write(&buf, (uint8_t *)&l, sizeof(l)));
+    assert(xarray_concat_write(&buf, (uint8_t *)str, len));
+
+    struct ipc_write wr;
+
+    wr.data = xarray_steal_write(&buf, &wr.size);
+    wr.remaining = wr.size;
+    wr.scm_fd = scm_fd;
+
+    if (!xarray_add_ipc_write(&ict->write_queue, wr))
     {
-        log_errerror("Error sending IPC message");
-        goto exit;
+        free(wr.data);
+        goto fail;
     }
-
-    memcpy(wr.data, (uint8_t *)&type, 1);
-    memcpy(wr.data + 1, &payload_sz, sizeof(payload_sz));
-    memcpy(wr.data + HEADER_SIZE, payload_data, payload_sz);
-    xarray_add_ipc_write(&ict->write_queue, wr);
-
-exit:
-    if (type == IPC_MESSAGE_JSON)
-        json_object_put(payload.json);
-    else
-        free(payload.blob.data);
+    return;
+fail:
+    json_object_put(msg);
+    if (scm_fd != -1)
+        close(scm_fd);
+    return;
 }

@@ -48,9 +48,7 @@ message_callback(struct ipc_message *msg, void *udata)
 {
     struct ipc_client *client = udata;
 
-    if (msg->type != IPC_MESSAGE_JSON)
-        return;
-
+    client->ipc->callback(client, msg, client->ipc->callback_udata);
     (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
 }
 
@@ -67,7 +65,7 @@ client_callback(int fd, int events, void *udata)
     // This logic to change fd events is kinda convoluted, is there a better
     // way?
     if (events & EPOLLIN)
-        ret = ipc_ct_read(&client->ict, message_callback, client);
+        ret = ipc_ct_read(&client->ict, false, message_callback, client);
     if (ret && events & EPOLLOUT)
         ret = ipc_ct_write(&client->ict);
 
@@ -307,41 +305,20 @@ ipc_uninit(struct ipc *ipc)
 }
 
 void
-ipc_emit_event(
-    struct ipc *ipc, enum ipc_message_type type, struct json_object *obj
-)
+ipc_emit_event(struct ipc *ipc, struct json_object *obj)
 {
     struct ipc_client *client;
 
-    xlist_foreach(ipc_client, &ipc->connections, client)
-    {
-        ipc_ct_write_msg(&client->ict, type, (union ipc_payload){.json = obj});
-    }
+    xlist_foreach(ipc_client, &ipc->connections, client) {}
     json_object_put(obj);
 }
 
 void
 ipc_client_send_error(struct ipc_client *client, const char *desc)
 {
-    ipc_ct_write_msg(
-        &client->ict,
-        IPC_MESSAGE_JSON,
-        (union ipc_payload){
-            .json = build_json_object(
-                JUTIL_FLAGS, "type", 's', "error", "desc", 's', desc, NULL
-            )
-        }
-    );
 }
 
 void
 ipc_client_add_success(struct ipc_client *client)
 {
-    ipc_ct_write_msg(
-        &client->ict,
-        IPC_MESSAGE_JSON,
-        (union ipc_payload){
-            .json = build_json_object(JUTIL_FLAGS, "type", 's', "success", NULL)
-        }
-    );
 }
