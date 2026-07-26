@@ -58,14 +58,22 @@ static const struct stmt_def stmt_defs[] = {
         "?, ?);"
     ),
     STMT(new_data, "INSERT OR IGNORE INTO Data (Data_id, Data) VALUES (?, ?)"),
-    STMT(get_mime_types, "SELECT Mime_type FROM Mime_types WHERE Id = ?;"),
+    STMT(
+        get_mime_types,
+        "SELECT Mime_type FROM Mime_types WHERE Id = ?;"
+    ),
     STMT(
         get_data_rowid,
         "SELECT Data.rowid FROM Mime_types LEFT JOIN Data ON Data.Data_id = "
         "Mime_types.Data_id WHERE Mime_types.Id = ? AND Mime_types.Mime_type = "
         "?;"
     ),
-    STMT(get_history_size, "SELECT COUNT(1) FROM Entries;")
+    STMT(get_history_size, "SELECT COUNT(1) FROM Entries;"),
+    STMT(
+        get_entries,
+        "SELECT Id, Creation_time, Update_time, Pinned FROM Entries "
+        "ORDER BY Id DESC LIMIT ? OFFSET ?;"
+    )
 };
 
 static bool
@@ -475,7 +483,7 @@ database_get_mime_types(
 
     while ((ret = sqlite3_step(stmt)) == SQLITE_ROW)
     {
-        const char *mime_type = (char *)sqlite3_column_text(stmt, 0);
+        const char    *mime_type = (char *)sqlite3_column_text(stmt, 0);
 
         callback(mime_type, udata);
     }
@@ -542,6 +550,47 @@ database_get_data(struct database *db, int64_t id, const char *mime_type)
 
     assert(blob != NULL);
     return blob;
+}
+
+bool
+database_get_entries(
+    struct database  *db,
+    int64_t           start,
+    int64_t           n,
+    db_entry_callback callback,
+    void             *udata
+)
+{
+    sqlite3_stmt *stmt = db->stmt.get_entries;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    sqlite3_bind_int64(stmt, 1, n);
+    sqlite3_bind_int64(stmt, 2, start);
+
+    int ret;
+
+    while ((ret = sqlite3_step(stmt)) == SQLITE_ROW)
+    {
+        int64_t id = sqlite3_column_int64(stmt, 0);
+        int64_t creation_time = sqlite3_column_int64(stmt, 1);
+        int64_t update_time = sqlite3_column_int64(stmt, 2);
+        bool    pinned = sqlite3_column_int(stmt, 3);
+
+        callback(id, creation_time, update_time, pinned, udata);
+    }
+
+    sqlite3_reset(stmt);
+
+    if (ret != SQLITE_DONE)
+    {
+        log_error(
+            "Error getting entries from database: %s",
+            sqlite3_errmsg(db->handle)
+        );
+        return false;
+    }
+    return true;
 }
 
 /*

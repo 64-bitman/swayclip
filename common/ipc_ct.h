@@ -21,15 +21,36 @@
 #include "xarray.h"
 #include <json.h>
 
+#define IPC_REQ_SUBSCRIBE "subscribe"
+#define IPC_REQ_GET_HISTORY_LENGTH "get-history-length"
+#define IPC_REQ_GET_ENTRIES "get-entries"
+#define IPC_REQ_GET_DATA "get-data"
+
+#define IPC_EVENT_ENTRY_ADD "entry-add"
+#define IPC_EVENT_FLAG_ENTRY_ADD 1
+#define IPC_EVENT_ENTRY_DELETE "entry-delete"
+#define IPC_EVENT_FLAG_ENTRY_DELETE 2
+#define IPC_EVENT_ENTRY_UPDATE "entry-update"
+#define IPC_EVENT_FLAG_ENTRY_UPDATE 4
+#define IPC_EVENT_CLIPBOARD_STATE "clipboard-state"
+#define IPC_EVENT_FLAG_CLIPBOARD_STATE 8
+
+enum ipc_message_type
+{
+    IPC_MESSAGE_CALL = 0,
+    IPC_MESSAGE_EVENT
+};
+
 // Messages are in the format of <<payload size><payload>, where <payload size>
 // is an unsigned 32 bit integer in native byte order. The message may have an
-// associated file descriptor with it using SCM_RIGHTS. This fd will be mmapped
+// associated file descriptor with it using SCM_RIGHTS. This fd will be mapped
 // to "aux_data" with the length of it being "aux_data_len".
 struct ipc_message
 {
-    struct json_object *payload;
-    void               *aux_data; // May be NULL
-    size_t              aux_data_len;
+    enum ipc_message_type type;
+    struct json_object   *payload;
+    void                 *aux_data; // May be NULL
+    size_t                aux_data_len;
 };
 
 struct ipc_write
@@ -46,10 +67,11 @@ struct ipc_ct
 {
     int fd;
 
-    uint32_t             pending_size;
-    int                  scm_fd;
-    struct json_tokener *tokener;
-    uint8_t              buf[4096];
+    enum ipc_message_type pending_type;
+    uint32_t              pending_size;
+    int                   scm_fd;
+    struct json_tokener  *tokener;
+    uint8_t               buf[4096];
 
     struct xarray_ipc_write write_queue;
 };
@@ -62,5 +84,5 @@ void ipc_ct_uninit(struct ipc_ct *ict);
 bool ipc_ct_read(struct ipc_ct *ict, bool need_scm, ipc_msg_callback callback, void *udata);
 bool ipc_ct_write(struct ipc_ct *ict);
 bool ipc_ct_has_pending_writes(struct ipc_ct *ict);
-void ipc_ct_write_msg(struct ipc_ct *ict, struct json_object *msg, int scm_fd);
+void ipc_ct_write_msg(struct ipc_ct *ict, enum ipc_message_type type, struct json_object *msg, int scm_fd);
 // clang-format on

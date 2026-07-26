@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include "common/sha256/sha256.h"
 #include "config.h"
 #include <sqlite3.h>
 #include <stdbool.h>
@@ -53,6 +54,8 @@ struct database
         sqlite3_stmt *get_mime_types;
         sqlite3_stmt *get_data_rowid;
 
+        sqlite3_stmt *get_entries;
+
         sqlite3_stmt *get_history_size;
     } stmt;
 };
@@ -61,7 +64,10 @@ struct database
 #define DB_SETTING_SELECTION_HASH "Selection_hash"
 #define DB_SETTING_LAST_ENTRY "Last_entry"
 
+// clang-format off
 typedef void (*db_mime_type_callback)(const char *mime_type, void *udata);
+typedef void (*db_entry_callback)(int64_t id, int64_t creation_time, int64_t update_time, bool pinned, void *udata);
+// clang-format on
 
 // clang-format off
 bool database_init(struct database *db, const char *dir, struct config *config);
@@ -73,5 +79,6 @@ int64_t database_new_entry(struct database *db);
 bool database_new_mime_type(struct database *db, int64_t id, const char *mime_type, const uint8_t *data_id, uint8_t *data, size_t len);
 bool database_get_mime_types(struct database *db, int64_t id, db_mime_type_callback callback, void *udata);
 sqlite3_blob *database_get_data(struct database *db, int64_t id, const char *mime_type);
+bool database_get_entries(struct database *db, int64_t start, int64_t n, db_entry_callback callback, void *udata);
 int64_t database_get_history_size(struct database *db);
 // clang-format on

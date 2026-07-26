@@ -22,8 +22,6 @@
 #include "common/json_util.h"
 #include "common/log.h"
 #include "common/xdg.h"
-#include <errno.h>
-#include <stdio.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -32,7 +30,7 @@
 struct ipc_client
 {
     // Bitflag of events this client has subscribed to
-    int events;
+    uint events;
 
     struct ipc   *ipc;
     struct ipc_ct ict;
@@ -47,6 +45,9 @@ static void
 message_callback(struct ipc_message *msg, void *udata)
 {
     struct ipc_client *client = udata;
+
+    if (msg->type != IPC_MESSAGE_CALL)
+        return;
 
     client->ipc->callback(client, msg, client->ipc->callback_udata);
     (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
@@ -304,21 +305,167 @@ ipc_uninit(struct ipc *ipc)
     free(ipc->lock_path);
 }
 
-void
-ipc_emit_event(struct ipc *ipc, struct json_object *obj)
+static void
+ipc_emit_event(struct ipc *ipc, uint event, struct json_object *msg)
 {
     struct ipc_client *client;
 
-    xlist_foreach(ipc_client, &ipc->connections, client) {}
-    json_object_put(obj);
+    if (msg == NULL)
+        return;
+
+    xlist_foreach(ipc_client, &ipc->connections, client)
+    {
+        if (client->events & event)
+            ipc_ct_write_msg(
+                &client->ict, IPC_MESSAGE_EVENT, json_object_get(msg), -1
+            );
+    }
+    json_object_put(msg);
+}
+
+static bool
+ipc_event_subscribed(struct ipc *ipc, uint event)
+{
+
+    struct ipc_client *client;
+
+    xlist_foreach(ipc_client, &ipc->connections, client)
+    {
+        if (client->events & event)
+            return true;
+    }
+    return false;
 }
 
 void
-ipc_client_send_error(struct ipc_client *client, const char *desc)
+ipc_event_entry_add(struct ipc *ipc, int64_t entry_id)
 {
+    if (ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_ADD))
+        return;
+    ipc_emit_event(
+        ipc,
+        IPC_EVENT_FLAG_ENTRY_ADD,
+        build_json_object(
+            NULL,
+            -1,
+            JSON_STR("event", "entry-add"),
+            JSON_INT("id", entry_id),
+            NULL
+        )
+    );
 }
 
 void
-ipc_client_add_success(struct ipc_client *client)
+ipc_event_entry_delete(struct ipc *ipc, int64_t entry_id)
 {
+    if (ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_DELETE))
+        return;
+    ipc_emit_event(
+        ipc,
+        IPC_EVENT_FLAG_ENTRY_DELETE,
+        build_json_object(
+            NULL,
+            -1,
+            JSON_STR("event", "entry-delete"),
+            JSON_INT("id", entry_id),
+            NULL
+        )
+    );
+}
+
+void
+ipc_event_entry_update(
+    struct ipc    *ipc,
+    int64_t        entry_id,
+    const bool    *pinned,
+    const int64_t *update_time
+)
+{
+    if (ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_UPDATE))
+        return;
+
+    struct json_object *msg;
+
+    msg = build_json_object(
+        NULL,
+        -1,
+        JSON_STR("event", "entry-update"),
+        JSON_INT("id", entry_id),
+        NULL
+    );
+
+    if (pinned != NULL)
+        build_json_object(msg, -1, JSON_BOOL("pinned", *pinned), NULL);
+    if (update_time != NULL)
+        build_json_object(msg, -1, JSON_INT("update-tim", *pinned), NULL);
+    ipc_emit_event(ipc, IPC_EVENT_FLAG_ENTRY_UPDATE, msg);
+}
+
+/*
+ * Emit event when clipboard state is changed (when currently set entry
+ * changes).
+ */
+void
+ipc_event_clipboard_state(struct ipc *ipc, int64_t entry_id, bool state)
+{
+    if (ipc_event_subscribed(ipc, IPC_EVENT_FLAG_CLIPBOARD_STATE))
+        return;
+    ipc_emit_event(
+        ipc,
+        IPC_EVENT_FLAG_CLIPBOARD_STATE,
+        build_json_object(
+            NULL,
+            -1,
+            JSON_STR("event", "clipboard-state"),
+            JSON_INT("id", entry_id),
+            JSON_BOOL("state", state),
+            NULL
+        )
+    );
+}
+
+void
+ipc_client_send(struct ipc_client *client, struct json_object *msg, int scm_fd)
+{
+    if (msg == NULL)
+        return;
+
+    ipc_ct_write_msg(&client->ict, IPC_MESSAGE_CALL, msg, scm_fd);
+}
+
+void
+ipc_client_send_error(struct ipc_client *client, const char *desc_fmt, ...)
+{
+    static char buf[256];
+    va_list     ap;
+
+    va_start(ap, desc_fmt);
+    vsnprintf(buf, sizeof(buf), desc_fmt, ap);
+    va_end(ap);
+
+    ipc_ct_write_msg(
+        &client->ict,
+        IPC_MESSAGE_CALL,
+        build_json_object(
+            NULL, 1, JSON_STR("type", "error"), JSON_STR("desc", buf), NULL
+        ),
+        -1
+    );
+}
+
+void
+ipc_client_send_success(struct ipc_client *client)
+{
+    ipc_ct_write_msg(
+        &client->ict,
+        IPC_MESSAGE_CALL,
+        build_json_object(NULL, -1, JSON_STR("type", "success"), NULL),
+        -1
+    );
+}
+
+void
+ipc_client_set_events(struct ipc_client *client, uint events)
+{
+    client->events = events;
 }

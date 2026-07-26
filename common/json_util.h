@@ -18,12 +18,21 @@
 
 #pragma once
 
-#include "util.h"
 #include <json.h>
+#include <stdbool.h>
 
 #define JUTIL_FLAGS                                                            \
     JSON_C_OBJECT_ADD_CONSTANT_KEY | JSON_C_OBJECT_ADD_KEY_IS_NEW
 
+#define JSON_NULL(k, v) k, 'n', v
+#define JSON_BOOL(k, v) k, 'b', v
+#define JSON_DOUBLE(k, v) k, 'd', v
+#define JSON_INT(k, v) k, 'i', v
+#define JSON_OBJ(k, v) k, 'o', v
+#define JSON_STR(k, v) k, 's', v
+#define JSON_STRL(k, v) k, 'S', v
+
 // clang-format off
-struct json_object *build_json_object(unsigned add_flags, ...) SENTINEL;
+struct json_object *build_json_object(struct json_object *obj, int add_flags, ...);
+bool extract_json_object(struct json_object *obj, ...);
 // clang-format on

@@ -247,7 +247,7 @@ io_recv(int fd, uint8_t *buf, size_t len, int *scm_fd, bool *poll)
         // Bad client
         log_warn("Received socket control message truncated?");
 
-    struct cmsghdr *chdr = *scm_fd == -1 ? CMSG_FIRSTHDR(&msgh) : NULL;
+    struct cmsghdr *chdr = need_scm ? CMSG_FIRSTHDR(&msgh) : NULL;
 
     if (need_scm)
     {

@@ -47,12 +47,15 @@ struct ipc
     void                *callback_udata;
 };
 
-#define IPC_SUCCESS "success", 'b', true
-
 // clang-format off
 bool ipc_init(struct ipc *ipc, struct eventloop *loop, ipc_request_callback callback, void *udata);
 void ipc_uninit(struct ipc *ipc);
 bool ipc_client_start_array(struct ipc_client *client, int len);
-void ipc_client_add_error(struct ipc_client *client, const char *desc);
-void ipc_client_add_success(struct ipc_client *client);
+void ipc_event_entry_add(struct ipc *ipc, int64_t entry_id);
+void ipc_event_entry_delete(struct ipc *ipc, int64_t entry_id);
+void ipc_event_entry_update(struct ipc *ipc, int64_t entry_id, const bool *pinned, const int64_t *update_time);
+void ipc_client_send(struct ipc_client *client, struct json_object *msg, int scm_fd);
+void ipc_client_send_error(struct ipc_client *client, const char *desc_fmt, ...);
+void ipc_client_send_success(struct ipc_client *client);
+void ipc_client_set_events(struct ipc_client *client, uint events);
 // clang-format on

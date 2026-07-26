@@ -25,6 +25,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define HEADER_SIZE (1 + (int)sizeof(uint32_t))
+
 xarray_create(uint8_t, write, uint32_t, 128, 2.0);
 
 /*
@@ -54,7 +56,12 @@ ipc_ct_uninit(struct ipc_ct *ict)
 {
     struct ipc_write *wr;
 
-    xarray_foreach(ipc_write, &ict->write_queue, wr) free(wr->data);
+    xarray_foreach(ipc_write, &ict->write_queue, wr)
+    {
+        free(wr->data);
+        if (wr->scm_fd != -1)
+            close(wr->scm_fd);
+    }
     xarray_uninit_ipc_write(&ict->write_queue);
     if (ict->scm_fd != -1)
         close(ict->scm_fd);
@@ -74,8 +81,7 @@ ipc_ct_read(
 {
     while (true)
     {
-        uint8_t *buf = ict->buf;
-        bool     recv_header = false;
+        bool recv_header = false;
 
         if (ict->pending_size == 0)
         {
@@ -88,19 +94,18 @@ ipc_ct_read(
                 log_errerror("Error querying pending bytes in IPC connection");
                 return false;
             }
-            if (pending < (int)sizeof(uint32_t))
+            if (pending < HEADER_SIZE)
                 return true;
 
-            buf = (uint8_t *)&ict->pending_size;
             recv_header = true;
-            ict->pending_size = sizeof(uint32_t);
+            ict->pending_size = HEADER_SIZE;
         }
 
         ssize_t r;
         bool    poll = false;
         int    *scm_ptr = need_scm ? &ict->scm_fd : NULL;
 
-        r = io_recv(ict->fd, buf, ict->pending_size, scm_ptr, &poll);
+        r = io_recv(ict->fd, ict->buf, ict->pending_size, scm_ptr, &poll);
         if (r == -1)
         {
             // EAGAIN or EWOULDBLOCK shouldn't happen
@@ -110,11 +115,13 @@ ipc_ct_read(
         }
         if (recv_header)
         {
-            if (r != sizeof(uint32_t)) // Shouldn't happen
+            if (r != HEADER_SIZE) // Shouldn't happen
             {
                 log_error("Error reading IPC message header");
                 return false;
             }
+            ict->pending_type = ict->buf[0];
+            memcpy(&ict->pending_size, ict->buf + 1, sizeof(uint32_t));
             // Restrict message size to 64 KiB
             if (ict->pending_size > 65536)
             {
@@ -135,7 +142,10 @@ ipc_ct_read(
         if (j_err == json_tokener_success)
         {
             struct ipc_message imsg = {
-                .aux_data = NULL, .aux_data_len = 0, .payload = msg
+                .type = ict->pending_type,
+                .aux_data = NULL,
+                .aux_data_len = 0,
+                .payload = msg
             };
             int scm_fd = ict->scm_fd;
 
@@ -152,7 +162,7 @@ ipc_ct_read(
                     if (imsg.aux_data == MAP_FAILED || imsg.aux_data == NULL)
                     {
                         if (imsg.aux_data == MAP_FAILED)
-                            log_errerror("Error mmapping IPC message fd");
+                            log_errerror("Error mapping IPC message fd");
                         imsg.aux_data = NULL;
                     }
                     else
@@ -168,6 +178,12 @@ ipc_ct_read(
             if (imsg.aux_data != NULL)
                 munmap(imsg.aux_data, imsg.aux_data_len);
         }
+        else if (j_err == json_tokener_continue)
+            continue;
+        else
+            // Just reset the tokener so that message after this corrupt message
+            // isn't affect.
+            json_tokener_reset(ict->tokener);
     }
 
     return true;
@@ -200,6 +216,7 @@ ipc_ct_write(struct ipc_ct *ict)
             log_error("Error writing to IPC connection");
             return false;
         }
+        close(wr->scm_fd);
         wr->scm_fd = -1; // Don't want to send fd mutliple times
         if (w == 0)
             // Not sure if this can happen, just return to poll I guess...
@@ -224,12 +241,20 @@ ipc_ct_has_pending_writes(struct ipc_ct *ict)
 
 /*
  * Note that ownership of "payload" and "scm_fd" (if not -1) is always taken. If
- * "payload" is invalid, nothing is done. If "scm_fd" is not -1, then it sent
- * along the message over the socket using SCM_RIGHTS.
+ * "msg" is NULL, nothing is written. If "scm_fd" is not -1, then it sent along
+ * the message over the socket using SCM_RIGHTS.
  */
 void
-ipc_ct_write_msg(struct ipc_ct *ict, struct json_object *msg, int scm_fd)
+ipc_ct_write_msg(
+    struct ipc_ct        *ict,
+    enum ipc_message_type type,
+    struct json_object   *msg,
+    int                   scm_fd
+)
 {
+    if (msg == NULL)
+        goto fail;
+
     size_t      len;
     const char *str =
         json_object_to_json_string_length(msg, JSON_C_TO_STRING_PLAIN, &len);
@@ -245,10 +270,12 @@ ipc_ct_write_msg(struct ipc_ct *ict, struct json_object *msg, int scm_fd)
 
     xarray_init_write(&buf);
 
-    if (!xarray_set_size_write(&buf, sizeof(l) + len))
+    if (!xarray_set_size_write(&buf, HEADER_SIZE + len))
         goto fail;
 
     // Should never fail
+    assert(type <= UINT8_MAX);
+    assert(xarray_add_write(&buf, type));
     assert(xarray_concat_write(&buf, (uint8_t *)&l, sizeof(l)));
     assert(xarray_concat_write(&buf, (uint8_t *)str, len));
 
@@ -263,6 +290,7 @@ ipc_ct_write_msg(struct ipc_ct *ict, struct json_object *msg, int scm_fd)
         free(wr.data);
         goto fail;
     }
+    json_object_put(msg);
     return;
 fail:
     json_object_put(msg);

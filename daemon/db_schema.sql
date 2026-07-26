@@ -37,15 +37,16 @@ INSERT OR IGNORE INTO Settings (Key, Value) VALUES ('Max_entries', 1000);
 
 CREATE TABLE IF NOT EXISTS Entries (
     Id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    Creation_time   INTEGER NOT NULL,
-    Update_time     INTEGER NOT NULL,
+    Creation_time   INTEGER NOT NULL, -- In milliseconds since unix epoch
+    Update_time     INTEGER NOT NULL, -- Same thing
     Pinned          INTEGER NOT NULL CHECK (Pinned IN (0, 1))
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS Mime_types (
     Id              INTEGER NOT NULL,
     Mime_type       TEXT NOT NULL,
-    Data_id         BLOB CHECK (LENGTH(Data_id) = 32), -- If NULL, then no data associated with entry.
+    -- If NULL, then no data associated with entry.
+    Data_id         BLOB CHECK (LENGTH(Data_id) = 32),
     PRIMARY KEY (Id, Mime_type),
     FOREIGN KEY (Id) REFERENCES Entries(Id) ON DELETE CASCADE,
     FOREIGN KEY (Data_id) REFERENCES Data(Data_id) ON DELETE RESTRICT

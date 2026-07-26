@@ -174,7 +174,7 @@ config_uninit(struct config *config)
     struct config_seat *config_seat;
 
     xarray_foreach(config_seat, &config->configured_seats, config_seat)
-        free(config_seat);
+        free(config_seat->name);
     xarray_uninit_config_seat(&config->configured_seats);
 
     regex_t *reg;
