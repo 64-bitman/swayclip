@@ -89,30 +89,30 @@ database_execute_statement(struct database *db, const char *statement)
 }
 
 bool
-database_init(struct database *db, const char *dir, struct config *config)
+database_init(struct database *db, const char *db_path, struct config *config)
 {
     char *path;
 
     if (config->persist)
     {
-        char *tofree = NULL;
-
-        if (dir == NULL)
+        if (db_path == NULL)
         {
-            tofree = xdg_get_base_dir(XDG_DATA_HOME, "swayclip");
-            dir = tofree;
-        }
-        if (dir == NULL)
-            return false;
-        if (mkdir(dir, 0755) == -1 && errno != EEXIST)
-        {
-            log_errerror("Error creating directory '%s'", dir);
-            free(tofree);
-            return false;
-        }
+            char *dir = xdg_get_base_dir(XDG_DATA_HOME, "swayclip");
+            if (dir == NULL)
+                return false;
 
-        path = xstrdup_printf("%s/history.sqlite3", dir);
-        free(tofree);
+            if (mkdir(dir, 0755) == -1 && errno != EEXIST)
+            {
+                log_errerror("Error creating directory '%s'", dir);
+                free(dir);
+                return false;
+            }
+
+            path = xstrdup_printf("%s/history.sqlite3", dir);
+            free(dir);
+        }
+        else
+            path = strdup(db_path);
     }
     else
         path = strdup(":memory:");
@@ -130,7 +130,7 @@ database_init(struct database *db, const char *dir, struct config *config)
     {
         log_error(
             "Error opening database at '%s': %s",
-            dir,
+            path,
             sqlite3_errmsg(db->handle)
         );
 

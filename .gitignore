@@ -13,5 +13,7 @@ tags
 version.txt
 compile_commands.json
 
+tests/__pycache__
+
 /subprojects/*
 !/subprojects/*.wrap

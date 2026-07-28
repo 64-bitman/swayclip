@@ -71,7 +71,7 @@ typedef void (*db_entry_callback)(int64_t id, int64_t creation_time, int64_t upd
 // clang-format on
 
 // clang-format off
-bool database_init(struct database *db, const char *dir, struct config *config);
+bool database_init(struct database *db, const char *db_path, struct config *config);
 void database_uninit(struct database *db);
 bool database_save_setting(struct database *db, const char *key, int type, ...);
 bool database_get_setting(struct database *db, const char *key, int type, ...);

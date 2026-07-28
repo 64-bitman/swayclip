@@ -381,8 +381,7 @@ request_callback(
 )
 {
     struct state *state = udata;
-
-    const char *type;
+    const char   *type;
 
     if (!extract_json_object(req->payload, JSON_STR("type", &type), NULL))
     {
@@ -564,7 +563,7 @@ main(int argc, char **argv)
     int   idx;
     bool  init_log = false;
     char *config = NULL;
-    char *data_dir = NULL;
+    char *db_file = NULL;
     bool  readymsg = false;
 
     while ((c = getopt_long(argc, argv, "l:c:s:rdv", options, &idx)) != -1)
@@ -580,8 +579,8 @@ main(int argc, char **argv)
             config = strdup(optarg);
             break;
         case 's':
-            free(data_dir);
-            data_dir = strdup(optarg);
+            free(db_file);
+            db_file = strdup(optarg);
             break;
         case 'r':
             readymsg = true;
@@ -594,7 +593,7 @@ main(int argc, char **argv)
             break;
         default:
             free(config);
-            free(data_dir);
+            free(db_file);
             return EXIT_FAILURE;
         }
     }
@@ -613,7 +612,7 @@ main(int argc, char **argv)
     {
         log_errerror("Error setting signal mask");
         free(config);
-        free(data_dir);
+        free(db_file);
         return EXIT_FAILURE;
     }
 
@@ -624,14 +623,14 @@ main(int argc, char **argv)
     free(config);
     if (!ret)
     {
-        free(data_dir);
+        free(db_file);
         return EXIT_FAILURE;
     }
 
     if (!eventloop_init(&state.loop))
     {
         config_uninit(&state.config);
-        free(data_dir);
+        free(db_file);
         return EXIT_FAILURE;
     }
 
@@ -642,8 +641,8 @@ main(int argc, char **argv)
         .can_set = {.callback = wsignal_can_set, .callback_udata = &state}
     };
 
-    ret = database_init(&state.db, data_dir, &state.config);
-    free(data_dir);
+    ret = database_init(&state.db, db_file, &state.config);
+    free(db_file);
     if (!ret)
     {
         config_uninit(&state.config);
@@ -699,22 +698,8 @@ main(int argc, char **argv)
 
     if (readymsg)
     {
-        struct json_object *obj = build_json_object(
-            NULL,
-            -1,
-            "database",
-            's',
-            state.db.path,
-            "ipc",
-            's',
-            state.ipc.path,
-            NULL
-        );
-        printf(
-            "%s\n", json_object_to_json_string_ext(obj, JSON_C_TO_STRING_PLAIN)
-        );
+        printf("Ready\n");
         fflush(stdout);
-        json_object_put(obj);
     }
 
     ret = eventloop_run(&state.loop);
