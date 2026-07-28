@@ -664,7 +664,10 @@ client_copy(Client *client, SelectionType sel, ...)
             break;
 
         const uint8_t *data = va_arg(ap, const uint8_t *);
-        ssize_t        sz = va_arg(ap, ssize_t);
+        int        sz = va_arg(ap, int);
+
+        if (sz == -1)
+            sz = strlen((char *)data);
 
         GBytes *bytes = g_bytes_new(data, sz);
 

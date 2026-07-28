@@ -554,6 +554,7 @@ main(int argc, char **argv)
         {"logfile", required_argument, 0, 'l'},
         {"config", required_argument, 0, 'c'},
         {"db", required_argument, 0, 's'},
+        {"ready", required_argument, 0, 'r'},
         {"debug", no_argument, 0, 'd'},
         {"version", no_argument, 0, 'v'},
         {NULL, 0, 0, 0}
@@ -564,8 +565,9 @@ main(int argc, char **argv)
     bool  init_log = false;
     char *config = NULL;
     char *data_dir = NULL;
+    bool readymsg = false;
 
-    while ((c = getopt_long(argc, argv, "l:c:s:dv", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "l:c:s:rdv", options, &idx)) != -1)
     {
         switch (c)
         {
@@ -574,10 +576,15 @@ main(int argc, char **argv)
             init_log = true;
             break;
         case 'c':
+            free(config);
             config = strdup(optarg);
             break;
         case 's':
+            free(data_dir);
             data_dir = strdup(optarg);
+            break;
+        case 'r':
+            readymsg = true;
             break;
         case 'd':
             log_set_level(LOG_DEBUG);
@@ -689,6 +696,12 @@ main(int argc, char **argv)
         ))
         state.id = -1;
     state.cleared = false;
+
+    if (readymsg)
+    {
+        printf("Ready\n");
+        fflush(stdout);
+    }
 
     ret = eventloop_run(&state.loop);
     log_info("Exiting...");

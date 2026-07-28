@@ -18,6 +18,10 @@
 
 #pragma once
 
+#include <gio/gio.h>
+#include <glib.h>
+#include <json.h>
+
 #define UNUSED G_GNUC_UNUSED
 
 #define ERROR _err
@@ -31,3 +35,14 @@
         }                                                                      \
         g_assert_no_error(ERROR);                                              \
     } while (FALSE)
+
+#define ASSERT_SQLITE(s) g_assert_cmpint(s, ==, SQLITE_OK)
+
+#define ASSERT_JSON(actual, expected)                                          \
+    assert_json(                                                         \
+        (actual), (expected), G_LOG_DOMAIN, __FILE__, __LINE__, G_STRFUNC      \
+    )
+
+// clang-format off
+void assert_json(struct json_object *actual, struct json_object *expected, const char *domain, const char *file, int line, const char *func);
+// clang-format on

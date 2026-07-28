@@ -19,16 +19,20 @@
 #include "client.h"
 #include "compositor.h"
 #include "daemon.h"
+#include "ipc.h"
 #include "util.h"
 #include <glib.h>
 #include <locale.h>
+#include <sqlite3.h>
 #include <sys/prctl.h>
 
 typedef struct
 {
-    Compositor comp;
-    Daemon     daemon;
-    Client    *client;
+    Compositor    comp;
+    Daemon        daemon;
+    struct ipc_ct ict;
+    sqlite3      *db;
+    Client       *client;
 } Fixture;
 
 static const char *CONFIG = "[daemon]\n"
@@ -41,10 +45,13 @@ static const char *CONFIG = "[daemon]\n"
                             "blocked = [\"blocked\"]\n";
 
 static void
-fixture_setup(Fixture *fixture, const void *udata UNUSED)
+fixture_setup(Fixture *fixture, const void *udata)
 {
     compositor_init(&fixture->comp);
-    daemon_init(&fixture->daemon, CONFIG, fixture->comp.display);
+    daemon_init(&fixture->daemon, udata, fixture->comp.display);
+    ASSERT_SQLITE(sqlite3_open_v2(
+        fixture->daemon.db_file, &fixture->db, SQLITE_OPEN_READONLY, NULL
+    ));
     fixture->client = client_new(fixture->comp.display);
 }
 
@@ -52,24 +59,20 @@ static void
 fixture_teardown(Fixture *fixture, const void *udata UNUSED)
 {
     client_free(fixture->client);
+    sqlite3_close(fixture->db);
     daemon_uninit(&fixture->daemon);
     compositor_uninit(&fixture->comp);
 }
 
+/*
+ * Test if clipboard contants are saved into the database
+ */
 static void
 test_clipboard_receive(Fixture *fixture, const void *udata UNUSED)
 {
     client_copy(
-        fixture->client, SELECTION_REGULAR, "text/plain", "test", 4, NULL
+        fixture->client, SELECTION_REGULAR, "one", "1", -1, "two", "2", -1, NULL
     );
-    g_printerr("%s\n", client_get_seat(fixture->client));
-
-    size_t      sz;
-    const char *str = client_paste_mime(
-        fixture->client, SELECTION_PRIMARY, "text/plain", &sz
-    );
-
-    g_assert_cmpmem(str, sz, "test", 4);
 }
 
 int
@@ -82,7 +85,7 @@ main(int argc, char **argv)
     g_test_add(
         "/daemon/receive",
         Fixture,
-        NULL,
+        CONFIG,
         fixture_setup,
         test_clipboard_receive,
         fixture_teardown

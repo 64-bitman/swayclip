@@ -41,10 +41,11 @@ enum ipc_message_type
     IPC_MESSAGE_EVENT
 };
 
-// Messages are in the format of <<payload size><payload>, where <payload size>
-// is an unsigned 32 bit integer in native byte order. The message may have an
-// associated file descriptor with it using SCM_RIGHTS. This fd will be mapped
-// to "aux_data" with the length of it being "aux_data_len".
+// Messages are in the format of <type><payload size><payload>, where <type> is
+// an unsigned byte and <payload size> is an unsigned 32 bit integer in native
+// byte order. The message may have an associated file descriptor with it using
+// SCM_RIGHTS. This fd will be mapped to "aux_data" with the length of it being
+// "aux_data_len".
 struct ipc_message
 {
     enum ipc_message_type type;

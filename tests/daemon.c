@@ -37,7 +37,7 @@ daemon_init(Daemon *daemon, const char *config, const char *display)
     daemon->db_file = g_build_filename(dir, "history.sqlite3", NULL);
 
     g_autoptr(GSubprocessLauncher) launcher =
-        g_subprocess_launcher_new(G_SUBPROCESS_FLAGS_NONE);
+        g_subprocess_launcher_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE);
 
     g_subprocess_launcher_setenv(
         launcher, "XDG_RUNTIME_DIR", g_get_user_runtime_dir(), TRUE
@@ -46,11 +46,26 @@ daemon_init(Daemon *daemon, const char *config, const char *display)
 
     ASSERT_NOERROR(
         daemon->proc = g_subprocess_launcher_spawn(
-            launcher, &ERROR, path, "-c", conf_file, "-s", dir, NULL
+            launcher, &ERROR, path, "-r", "-c", conf_file, "-s", dir, NULL
         )
     );
 
-    g_assert_nonnull(daemon->proc);
+    // Wait until we get "ready" message from daemon
+    GInputStream *in_stream = g_subprocess_get_stdout_pipe(daemon->proc);
+    g_autoptr(GDataInputStream) stream = g_data_input_stream_new(in_stream);
+
+    while (TRUE)
+    {
+        g_autofree char *line;
+
+        ASSERT_NOERROR(
+            line =
+                g_data_input_stream_read_line_utf8(stream, NULL, NULL, &ERROR)
+        );
+
+        if (strcmp(line, "Ready") == 0)
+            break;
+    }
 }
 
 void

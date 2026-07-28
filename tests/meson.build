@@ -7,14 +7,14 @@ endif
 
 tests = {
   'clipboard': {
-    'sources': ['daemon.c', 'compositor.c', 'client.c'],
-    'deps': [wl_dep, sqlite_dep],
-    'link': [test_proto_libs]
+    'sources': ['daemon.c', 'compositor.c', 'client.c', 'ipc.c'],
+    'deps': [wl_dep, sqlite_dep, json_dep, xstructs_dep],
+    'link': [test_proto_libs, ipc_ct_lib]
   }
 }
 
 foreach test_name, test_opts : tests
-  extra_sources = test_opts.get('sources', [])
+  extra_sources = test_opts.get('sources', []) + ['util.c']
   extra_deps = test_opts.get('deps', [])
   link_with = test_opts.get('link', [])
   sources = ['test_' + test_name + '.c'] + extra_sources
