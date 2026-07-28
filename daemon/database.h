@@ -34,6 +34,7 @@ enum database_transaction
 struct database
 {
     sqlite3 *handle;
+    char    *path; // Path to sqlite database file
 
     struct config *config;
 

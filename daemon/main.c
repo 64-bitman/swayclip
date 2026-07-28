@@ -565,7 +565,7 @@ main(int argc, char **argv)
     bool  init_log = false;
     char *config = NULL;
     char *data_dir = NULL;
-    bool readymsg = false;
+    bool  readymsg = false;
 
     while ((c = getopt_long(argc, argv, "l:c:s:rdv", options, &idx)) != -1)
     {
@@ -699,8 +699,22 @@ main(int argc, char **argv)
 
     if (readymsg)
     {
-        printf("Ready\n");
+        struct json_object *obj = build_json_object(
+            NULL,
+            -1,
+            "database",
+            's',
+            state.db.path,
+            "ipc",
+            's',
+            state.ipc.path,
+            NULL
+        );
+        printf(
+            "%s\n", json_object_to_json_string_ext(obj, JSON_C_TO_STRING_PLAIN)
+        );
         fflush(stdout);
+        json_object_put(obj);
     }
 
     ret = eventloop_run(&state.loop);

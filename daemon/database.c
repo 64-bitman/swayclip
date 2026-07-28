@@ -58,10 +58,7 @@ static const struct stmt_def stmt_defs[] = {
         "?, ?);"
     ),
     STMT(new_data, "INSERT OR IGNORE INTO Data (Data_id, Data) VALUES (?, ?)"),
-    STMT(
-        get_mime_types,
-        "SELECT Mime_type FROM Mime_types WHERE Id = ?;"
-    ),
+    STMT(get_mime_types, "SELECT Mime_type FROM Mime_types WHERE Id = ?;"),
     STMT(
         get_data_rowid,
         "SELECT Data.rowid FROM Mime_types LEFT JOIN Data ON Data.Data_id = "
@@ -123,11 +120,12 @@ database_init(struct database *db, const char *dir, struct config *config)
     if (path == NULL)
         return false;
 
+    db->path = path;
+
     int flags =
         SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX;
     int ret = sqlite3_open_v2(path, &db->handle, flags, NULL);
 
-    free(path);
     if (ret != SQLITE_OK)
     {
         log_error(
@@ -138,6 +136,7 @@ database_init(struct database *db, const char *dir, struct config *config)
 
         if (db->handle != NULL)
             sqlite3_close(db->handle);
+        free(path);
         return false;
     }
 
@@ -145,8 +144,11 @@ database_init(struct database *db, const char *dir, struct config *config)
     if (!database_execute_statement(db, db_schema))
     {
         sqlite3_close(db->handle);
+        free(path);
         return false;
     }
+
+    db->path = path;
 
     for (int i = 0; i < N_ELEMENTS(stmt_defs); i++)
     {
@@ -178,9 +180,9 @@ database_init(struct database *db, const char *dir, struct config *config)
             "    SELECT Id FROM Entries WHERE Pinned = 0"
             "    ORDER BY Id DESC LIMIT -1 OFFSET ("
             "        SELECT CAST(Value AS INTEGER) FROM Settings WHERE Key = "
-            "'Max_entries'"
+            "           'Max_entries'"
             "    )"
-            ");"
+            ") AND EXISTS (SELECT 1 FROM Settings WHERE Key = 'Max_entries');"
         );
 
     return true;
@@ -189,6 +191,7 @@ database_init(struct database *db, const char *dir, struct config *config)
 void
 database_uninit(struct database *db)
 {
+    free(db->path);
     if (!database_execute_statement(db, "PRAGMA optimize;"))
         log_warn("Error optimizing database");
 
@@ -483,7 +486,7 @@ database_get_mime_types(
 
     while ((ret = sqlite3_step(stmt)) == SQLITE_ROW)
     {
-        const char    *mime_type = (char *)sqlite3_column_text(stmt, 0);
+        const char *mime_type = (char *)sqlite3_column_text(stmt, 0);
 
         callback(mime_type, udata);
     }
