@@ -154,12 +154,8 @@ ipc_ct_read(
 
         r = io_recv(ict->fd, ict->buf, ict->pending_size, scm_ptr, &poll);
         if (r == -1)
-        {
-            // EAGAIN or EWOULDBLOCK shouldn't happen
-            if (poll)
-                log_warn("io_recv() returned EAGAIN/EWOULDBLOCK?");
-            return false;
-        }
+            return poll;
+
         if (recv_header)
         {
             if (r != HEADER_SIZE) // Shouldn't happen
