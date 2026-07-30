@@ -130,6 +130,8 @@ config_init(struct config *config, const char *file)
         .max_entries = 100,
         .max_size = 10000000, // 10 MB
         .persist = true,
+        .regular = true,
+        .primary = true
     };
 
     xarray_init_config_seat(&config->configured_seats);

@@ -18,6 +18,7 @@
 
 #include "wayland.h"
 #include "common/log.h"
+#include <signal.h>
 #include <string.h>
 #include <sys/timerfd.h>
 #include <unistd.h>
@@ -130,6 +131,12 @@ static const struct ext_data_control_source_v1_listener data_source_listener = {
     .send = data_source_event_send, .cancelled = data_source_event_cancelled
 };
 
+static const char *
+selection_str(struct selection *sel)
+{
+    return sel->type == WAYLAND_SELECTION_REGULAR ? "regular" : "primary";
+}
+
 static void
 selection_set(struct selection *sel)
 {
@@ -137,7 +144,9 @@ selection_set(struct selection *sel)
     bool            clear = false;
 
     log_debug(
-        "Setting selection %d for seat \"%s\"", sel->type, sel->seat->name
+        "Setting %s selection for seat \"%s\"",
+        selection_str(sel),
+        sel->seat->name
     );
 
     struct ext_data_control_source_v1 *source = wayland->signals.set.callback(
@@ -283,6 +292,10 @@ selection_event(
     struct selection                 *sel
 )
 {
+    log_debug(
+        "New selection event for %s selection: %p", selection_str(sel), offer
+    );
+
     if (!sel->enabled)
     {
         if (offer != NULL)
@@ -485,6 +498,8 @@ seat_event_name(void *udata, struct wl_seat *proxy UNUSED, const char *name)
 {
     struct seat *seat = udata;
 
+    log_debug("New seat \"%s\"", name);
+
     if (seat->wayland->ext_data_mgr == NULL)
     {
         log_warn("Seat name event received before globals?");
@@ -547,6 +562,10 @@ wayland_add_seat(
 static void
 wayland_del_seat(struct seat *seat)
 {
+    log_debug(
+        "Removing seat \"%s\"", seat->name == NULL ? "(unknown)" : seat->name
+    );
+
     selection_uninit(&seat->sel_regular);
     selection_uninit(&seat->sel_primary);
 

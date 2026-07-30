@@ -389,6 +389,8 @@ request_callback(
         return;
     }
 
+    log_debug("Serving IPC request \"%s\"", type);
+
     if (strcmp(type, IPC_REQ_SUBSCRIBE) == 0)
     {
         struct json_object *arr =
