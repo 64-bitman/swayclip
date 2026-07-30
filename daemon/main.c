@@ -387,10 +387,10 @@ get_entry_callback(
         obj,
         -1,
         JSON_INT("id", id),
-        JSON_INT("creation-time", creation_time),
-        JSON_INT("update-time", update_time),
+        JSON_INT("creation_time", creation_time),
+        JSON_INT("update_time", update_time),
         JSON_BOOL("pinned", pinned),
-        JSON_OBJ("mime-types", mime_types),
+        JSON_OBJ("mime_types", mime_types),
         NULL
     );
 
@@ -509,7 +509,7 @@ request_callback(
         if (!extract_json_object(
                 req->payload,
                 JSON_INT("id", &id),
-                JSON_STR("mime-type", &mime_type),
+                JSON_STR("mime_type", &mime_type),
                 NULL
             ))
         {

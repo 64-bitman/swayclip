@@ -322,7 +322,7 @@ ipc_event_entry_add(struct ipc *ipc, int64_t entry_id)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", "entry-add"),
+            JSON_STR("event", IPC_EVENT_FLAG_ENTRY_ADD),
             JSON_INT("id", entry_id),
             NULL
         )
@@ -340,7 +340,7 @@ ipc_event_entry_delete(struct ipc *ipc, int64_t entry_id)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", "entry-delete"),
+            JSON_STR("event", IPC_EVENT_FLAG_ENTRY_DELETE),
             JSON_INT("id", entry_id),
             NULL
         )
@@ -366,7 +366,7 @@ ipc_event_entry_update(
     msg = build_json_object(
         NULL,
         -1,
-        JSON_STR("event", "entry-update"),
+        JSON_STR("event", IPC_EVENT_FLAG_ENTRY_UPDATE),
         JSON_INT("id", entry_id),
         NULL
     );
@@ -374,7 +374,7 @@ ipc_event_entry_update(
     if (pinned != NULL)
         build_json_object(msg, -1, JSON_BOOL("pinned", *pinned), NULL);
     if (update_time != NULL)
-        build_json_object(msg, -1, JSON_INT("update-tim", *pinned), NULL);
+        build_json_object(msg, -1, JSON_INT("update_time", *update_time), NULL);
     ipc_emit_event(ipc, IPC_EVENT_FLAG_ENTRY_UPDATE, msg);
 }
 
@@ -393,7 +393,7 @@ ipc_event_clipboard_state(struct ipc *ipc, int64_t entry_id, bool state)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", "clipboard-state"),
+            JSON_STR("event", IPC_EVENT_FLAG_CLIPBOARD_STATE),
             JSON_INT("id", entry_id),
             JSON_BOOL("state", state),
             NULL
