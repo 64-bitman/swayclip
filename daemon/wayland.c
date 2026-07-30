@@ -18,7 +18,6 @@
 
 #include "wayland.h"
 #include "common/log.h"
-#include <signal.h>
 #include <string.h>
 #include <sys/timerfd.h>
 #include <unistd.h>
