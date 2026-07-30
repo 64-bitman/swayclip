@@ -6,14 +6,19 @@ if not pytest.found()
   subdir_done()
 endif
 
-wlr_dep = dependency('wlroots-0.20')
+wlr_dep = dependency('wlroots-0.20', required: false)
+server_dep = dependency('wayland-server', required: false)
+
+if not wlr_dep.found() or not server_dep.found()
+  subdir_done()
+endif
 
 testserver = executable(
   'testserver',
   'testserver.c',
+  c_args: ['-DWLR_USE_UNSTABLE'],
   include_directories: [includes, include_directories('.')],
-  dependencies: [wl_dep, json_dep, xstructs_dep],
-  link_with: [test_proto_libs]
+  dependencies: [server_dep, wlr_dep, json_dep, xstructs_dep]
 )
 
 

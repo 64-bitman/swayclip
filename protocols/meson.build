@@ -13,11 +13,10 @@ picker_protocols = [
   'fractional-scale-v1',
   'viewporter'
 ]
-test_protocols = ['ext-transient-seat-v1', 'ext-data-control-v1']
 
 # Union of all protocols, deduplicated
 all_protocols = []
-foreach p : daemon_protocols + picker_protocols + test_protocols
+foreach p : daemon_protocols + picker_protocols
   if not all_protocols.contains(p)
     all_protocols += p
   endif
@@ -56,9 +55,4 @@ endforeach
 picker_proto_libs = []
 foreach name : picker_protocols
   picker_proto_libs += proto_libs[name]
-endforeach
-
-test_proto_libs = []
-foreach name : test_protocols
-  test_proto_libs += proto_libs[name]
 endforeach
