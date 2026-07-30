@@ -632,6 +632,20 @@ request_callback(
         ipc_client_send_error(client, IPC_INVALID_ARGS);
 }
 
+static void
+help(void)
+{
+    printf("Usage: swayclip [OPTIONS]\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("  -l, --logfile <path>      File to write log messages to\n");
+    printf("  -c, --config <path>       File to parse config\n");
+    printf("  -s, --db <path>           File to place SQLite database\n");
+    printf("  -d, --debug               Enable debug log messages\n");
+    printf("  -h, --help                Show this help message\n");
+    printf("  -v, --version             Show version\n");
+}
+
 int
 main(int argc, char **argv)
 {
@@ -640,6 +654,7 @@ main(int argc, char **argv)
         {"config", required_argument, 0, 'c'},
         {"db", required_argument, 0, 's'},
         {"debug", no_argument, 0, 'd'},
+        {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'v'},
         {NULL, 0, 0, 0}
     };
@@ -650,7 +665,7 @@ main(int argc, char **argv)
     char *config = NULL;
     char *db_file = NULL;
 
-    while ((c = getopt_long(argc, argv, "l:c:s:dv", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "l:c:s:dhv", options, &idx)) != -1)
     {
         switch (c)
         {
@@ -669,6 +684,9 @@ main(int argc, char **argv)
         case 'd':
             log_set_level(LOG_DEBUG);
             break;
+        case 'h':
+            help();
+            return EXIT_SUCCESS;
         case 'v':
             printf("%s\n", PROJECT_VERSION);
             return EXIT_SUCCESS;

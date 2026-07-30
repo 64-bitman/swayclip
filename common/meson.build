@@ -65,7 +65,7 @@ ipc_ct_lib = static_library(
   'ipc_ct.h',
   include_directories: include_directories('.'),
   dependencies: [json_dep, xstructs_dep],
-  link_with: [log_lib]
+  link_with: [log_lib, io_lib]
 )
 
 json_util_lib = static_library(
