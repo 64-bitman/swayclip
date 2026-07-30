@@ -72,7 +72,12 @@ static const struct stmt_def stmt_defs[] = {
         "ORDER BY Id DESC LIMIT ? OFFSET ?;"
     ),
     STMT(id_exists, "SELECT 1 FROM Entries WHERE Id = ?;"),
-    STMT(del_entry, "DELETE FROM Entries WHERE Id = ?;")
+    STMT(del_entry, "DELETE FROM Entries WHERE Id = ?;"),
+    STMT(
+        update_entry,
+        "UPDATE Entries SET Update_time = ?, Pinned = COALESCE(?, Pinned) "
+        "WHERE Id = ?"
+    )
 };
 
 static bool
@@ -662,4 +667,38 @@ database_delete_entry(struct database *db, int64_t id)
 
     log_warn("Error deleting entry: %s", sqlite3_errmsg(db->handle));
     return false;
+}
+
+/*
+ * If "pinned" is NULL, then it will be left unchanged. Return new update time
+ * in milliseconds or -1 on error.
+ */
+int64_t
+database_update_entry(struct database *db, int64_t id, const bool *pinned)
+{
+    sqlite3_stmt *stmt = db->stmt.update_entry;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    int64_t t = get_time_ns(CLOCK_REALTIME) / 1000000; // ms
+
+    sqlite3_bind_int64(stmt, 1, t);
+
+    if (pinned != NULL)
+        sqlite3_bind_int(stmt, 2, *pinned);
+    else
+        sqlite3_bind_null(stmt, 2);
+
+    sqlite3_bind_int64(stmt, 3, id);
+
+    int ret = sqlite3_step(stmt);
+
+    sqlite3_reset(stmt);
+    if (ret != SQLITE_DONE)
+    {
+        log_warn("Error updating entry: %s", sqlite3_errmsg(db->handle));
+        return -1;
+    }
+
+    return t;
 }

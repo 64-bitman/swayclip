@@ -373,12 +373,15 @@ ipc_event_entry_delete(struct ipc *ipc, int64_t entry_id)
     );
 }
 
+/*
+ * "pinned" and "update_time" are optional, but at least one should be set.
+ */
 void
 ipc_event_entry_update(
     struct ipc    *ipc,
     int64_t        entry_id,
-    const bool    *pinned,
-    const int64_t *update_time
+    const int64_t *update_time,
+    const bool    *pinned
 )
 {
     if (ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_UPDATE))

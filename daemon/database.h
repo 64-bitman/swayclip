@@ -61,6 +61,7 @@ struct database
         sqlite3_stmt *id_exists;
 
         sqlite3_stmt *del_entry;
+        sqlite3_stmt *update_entry;
     } stmt;
 };
 
@@ -87,4 +88,5 @@ bool database_get_entries(struct database *db, int64_t start, int64_t n, db_entr
 int64_t database_get_history_size(struct database *db);
 bool database_id_exists(struct database *db, int64_t id);
 bool database_delete_entry(struct database *db, int64_t id);
+int64_t database_update_entry(struct database *db, int64_t id, const bool *pinned);
 // clang-format on

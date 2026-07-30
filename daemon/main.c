@@ -85,15 +85,36 @@ signal_callback(int fd, int events UNUSED, void *udata)
     return false;
 }
 
+static bool
+update(struct state *state, int64_t id, const bool *pinned)
+{
+    int64_t t = database_update_entry(&state->db, id, pinned);
+
+    if (t == -1)
+        return false;
+
+    ipc_event_entry_update(&state->ipc, id, &t, pinned);
+    return true;
+}
+
 static void
 set(struct state *state, struct selection *ignore)
 {
+    if (state->id != -1)
+        ipc_event_clipboard_state(&state->ipc, state->id, false);
+
     if (database_save_setting(
             &state->db, DB_SETTING_LAST_ENTRY, SQLITE_INTEGER, state->id
         ))
         wayland_set(&state->wayland, ignore);
     else
         state->id = -1;
+
+    if (state->id != -1)
+    {
+        ipc_event_clipboard_state(&state->ipc, state->id, true);
+        update(state, state->id, NULL);
+    }
 }
 
 static void
@@ -220,6 +241,8 @@ exit:
     if (ret)
     {
         state->id = id;
+        ipc_event_entry_add(&state->ipc, id);
+
         // Don't want to set the source selection, let the original source
         // client be.
         set(state, sel);
@@ -564,7 +587,7 @@ request_callback(
         }
 
         state->id = id;
-        wayland_set(&state->wayland, NULL);
+        set(state, NULL);
 
         ipc_client_send_success(client);
     }
@@ -585,6 +608,25 @@ request_callback(
         }
 
         ipc_client_send_success(client);
+        ipc_event_entry_delete(&state->ipc, id);
+    }
+    else if (strcmp(type, IPC_REQ_PIN_ENTRY) == 0)
+    {
+        int64_t id;
+        bool    pin;
+
+        if (!extract_json_object(
+                req->payload, JSON_INT("id", &id), JSON_BOOL("pin", &pin), NULL
+            ))
+        {
+            ipc_client_send_error(client, IPC_INVALID_ARGS);
+            return;
+        }
+
+        if (!update(state, id, &pin))
+            ipc_client_send_error(client, IPC_DB_ERROR);
+        else
+            ipc_client_send_success(client);
     }
     else
         ipc_client_send_error(client, IPC_INVALID_ARGS);
@@ -597,7 +639,6 @@ main(int argc, char **argv)
         {"logfile", required_argument, 0, 'l'},
         {"config", required_argument, 0, 'c'},
         {"db", required_argument, 0, 's'},
-        {"ready", required_argument, 0, 'r'},
         {"debug", no_argument, 0, 'd'},
         {"version", no_argument, 0, 'v'},
         {NULL, 0, 0, 0}
@@ -608,9 +649,8 @@ main(int argc, char **argv)
     bool  init_log = false;
     char *config = NULL;
     char *db_file = NULL;
-    bool  readymsg = false;
 
-    while ((c = getopt_long(argc, argv, "l:c:s:rdv", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "l:c:s:dv", options, &idx)) != -1)
     {
         switch (c)
         {
@@ -625,9 +665,6 @@ main(int argc, char **argv)
         case 's':
             free(db_file);
             db_file = strdup(optarg);
-            break;
-        case 'r':
-            readymsg = true;
             break;
         case 'd':
             log_set_level(LOG_DEBUG);
@@ -739,12 +776,6 @@ main(int argc, char **argv)
         ))
         state.id = -1;
     state.cleared = false;
-
-    if (readymsg)
-    {
-        printf("Ready\n");
-        fflush(stdout);
-    }
 
     ret = eventloop_run(&state.loop);
     log_info("Exiting...");
