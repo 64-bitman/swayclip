@@ -14,7 +14,6 @@ add_project_arguments(
     '-Winit-self',
     '-Wnull-dereference',
     '-Wno-float-equal',
-    '-Winline',
   ],
   language: 'c'
 )

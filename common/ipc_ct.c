@@ -259,8 +259,11 @@ ipc_ct_write(struct ipc_ct *ict)
             log_error("Error writing to IPC connection");
             return false;
         }
-        close(wr->scm_fd);
-        wr->scm_fd = -1; // Don't want to send fd mutliple times
+        if (wr->scm_fd != -1)
+        {
+            close(wr->scm_fd);
+            wr->scm_fd = -1; // Don't want to send fd mutliple times
+        }
         if (w == 0)
             // Not sure if this can happen, just return to poll I guess...
             return true;

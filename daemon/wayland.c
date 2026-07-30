@@ -256,6 +256,8 @@ data_device_event_data_offer(
 static bool
 null_timer_callback(int fd, int events, void *udata)
 {
+    struct selection *sel = udata;
+
     if (events & (EPOLLHUP | EPOLLERR))
     {
         log_errwarn("Error polling timer fd for null check");
@@ -273,13 +275,12 @@ null_timer_callback(int fd, int events, void *udata)
         goto stop;
     }
 
-    struct selection *sel = udata;
-
     if (sel->ext_data_offer == NULL)
         // NULL selection event is valid, become the source client
         selection_set(sel);
 
 stop:
+    sel->null_timerfd = -1;
     close(fd);
     return true;
 }
@@ -291,10 +292,6 @@ selection_event(
     struct selection                 *sel
 )
 {
-    log_debug(
-        "New selection event for %s selection: %p", selection_str(sel), offer
-    );
-
     if (!sel->enabled)
     {
         if (offer != NULL)
@@ -302,11 +299,16 @@ selection_event(
         return;
     }
 
+    log_debug(
+        "New selection event for %s selection: %p", selection_str(sel), offer
+    );
+
     if (sel->ext_data_offer != NULL)
         ext_data_control_offer_v1_destroy(sel->ext_data_offer);
 
     if (sel->ext_data_source != NULL || seat->blocked)
     {
+        log_debug("Currently source client or blocked, ignoring");
         // Currently source client or blocked, ignore
         if (offer != NULL)
             ext_data_control_offer_v1_destroy(offer);
@@ -320,8 +322,10 @@ selection_event(
     {
         struct wayland *wayland = seat->wayland;
 
-        // If there is nothing to be set, don't add a timer
-        if (!wayland->signals.can_set.callback(
+        // If there is nothing to be set or timer is already set, don't add a
+        // timer
+        if (sel->null_timerfd != -1 ||
+            !wayland->signals.can_set.callback(
                 wayland->signals.can_set.callback_udata
             ))
             return;

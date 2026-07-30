@@ -174,7 +174,6 @@ wsignal_selection(
             .bufsize = sizeof(state->buf),
             .data_callback = read_callback,
             .callback_udata = &data_sha_ctx,
-            .no_data = false
         };
 
         if (!io_read(&ctx, 3000))
@@ -212,12 +211,16 @@ wsignal_selection(
 
     sha256_final(&sha_ctx, sel_hash);
 
+    bool ignore = false;
+
     // Check if selection event is the same as the prior selection event. If
     // so, then ignore it.
     if (state->selection_hash_init &&
         memcmp(sel_hash, state->selection_hash, SHA256_BLOCK_SIZE) == 0)
     {
+        log_debug("Selection is same as previous, ignoring");
         ret = false;
+        ignore = true;
     }
     else
     {
@@ -247,7 +250,7 @@ exit:
         // client be.
         set(state, sel);
     }
-    else
+    else if (!ignore)
         state->id = -1;
 }
 
@@ -300,7 +303,7 @@ wsignal_send(const char *mime_type, int fd, void *udata)
         .callback_udata = callback_udata
     };
 
-    // Maybe run this in the event loop (non-blocking)? Not sure if worth it...
+    // TODO: Maybe run this in the event loop (non-blocking)?
     (void)io_write(&ctx, 3000);
 
     sqlite3_blob_close(blob);

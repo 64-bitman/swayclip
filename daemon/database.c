@@ -138,7 +138,7 @@ database_init(struct database *db, const char *db_path, struct config *config)
         log_error(
             "Error opening database at '%s': %s",
             path,
-            sqlite3_errmsg(db->handle)
+            db->handle == NULL ? "" : sqlite3_errmsg(db->handle)
         );
 
         if (db->handle != NULL)
@@ -154,8 +154,6 @@ database_init(struct database *db, const char *db_path, struct config *config)
         free(path);
         return false;
     }
-
-    db->path = path;
 
     for (int i = 0; i < N_ELEMENTS(stmt_defs); i++)
     {
@@ -295,6 +293,7 @@ database_get_setting(struct database *db, const char *key, int type, ...)
     }
 
     va_list ap;
+    bool    res = true;
 
     va_start(ap, type);
     switch (type)
@@ -308,8 +307,15 @@ database_get_setting(struct database *db, const char *key, int type, ...)
         int      sz = va_arg(ap, int);
         int     *len = va_arg(ap, int *);
 
-        const uint8_t *data = sqlite3_column_blob(stmt, 0);
         int            size = sqlite3_column_bytes(stmt, 0);
+        const uint8_t *data = sqlite3_column_blob(stmt, 0);
+
+        if (data == NULL || size != sz)
+        {
+            log_error("Blob setting \"%s\" is invalid", key);
+            res = false;
+            break;
+        }
 
         memcpy(buf, data, MIN(size, sz));
         if (len != NULL)
@@ -323,7 +329,7 @@ database_get_setting(struct database *db, const char *key, int type, ...)
     va_end(ap);
     sqlite3_reset(stmt);
 
-    return true;
+    return res;
 }
 
 /*

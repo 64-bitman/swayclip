@@ -30,7 +30,6 @@ struct io_read
     size_t   bufsize;
     void (*data_callback)(uint8_t *buf, ssize_t len, void *udata);
     void *callback_udata;
-    bool  no_data; // If buffer should be written to "data" each time
 
     // Set by function
     struct xarray_io data;

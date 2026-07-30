@@ -211,7 +211,7 @@ ipc_init(
         goto fail2;
     }
 
-    struct sockaddr_un addr;
+    struct sockaddr_un addr = {0};
 
     snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", path);
     addr.sun_family = AF_UNIX;
@@ -314,7 +314,7 @@ ipc_event_subscribed(struct ipc *ipc, uint event)
 void
 ipc_event_entry_add(struct ipc *ipc, int64_t entry_id)
 {
-    if (ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_ADD))
+    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_ADD))
         return;
     ipc_emit_event(
         ipc,
@@ -322,7 +322,7 @@ ipc_event_entry_add(struct ipc *ipc, int64_t entry_id)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", IPC_EVENT_FLAG_ENTRY_ADD),
+            JSON_STR("event", IPC_EVENT_ENTRY_ADD),
             JSON_INT("id", entry_id),
             NULL
         )
@@ -332,7 +332,7 @@ ipc_event_entry_add(struct ipc *ipc, int64_t entry_id)
 void
 ipc_event_entry_delete(struct ipc *ipc, int64_t entry_id)
 {
-    if (ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_DELETE))
+    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_DELETE))
         return;
     ipc_emit_event(
         ipc,
@@ -340,7 +340,7 @@ ipc_event_entry_delete(struct ipc *ipc, int64_t entry_id)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", IPC_EVENT_FLAG_ENTRY_DELETE),
+            JSON_STR("event", IPC_EVENT_ENTRY_DELETE),
             JSON_INT("id", entry_id),
             NULL
         )
@@ -358,7 +358,7 @@ ipc_event_entry_update(
     const bool    *pinned
 )
 {
-    if (ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_UPDATE))
+    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_UPDATE))
         return;
 
     struct json_object *msg;
@@ -366,7 +366,7 @@ ipc_event_entry_update(
     msg = build_json_object(
         NULL,
         -1,
-        JSON_STR("event", IPC_EVENT_FLAG_ENTRY_UPDATE),
+        JSON_STR("event", IPC_EVENT_ENTRY_UPDATE),
         JSON_INT("id", entry_id),
         NULL
     );
@@ -385,7 +385,7 @@ ipc_event_entry_update(
 void
 ipc_event_clipboard_state(struct ipc *ipc, int64_t entry_id, bool state)
 {
-    if (ipc_event_subscribed(ipc, IPC_EVENT_FLAG_CLIPBOARD_STATE))
+    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_CLIPBOARD_STATE))
         return;
     ipc_emit_event(
         ipc,
@@ -393,7 +393,7 @@ ipc_event_clipboard_state(struct ipc *ipc, int64_t entry_id, bool state)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", IPC_EVENT_FLAG_CLIPBOARD_STATE),
+            JSON_STR("event", IPC_EVENT_CLIPBOARD_STATE),
             JSON_INT("id", entry_id),
             JSON_BOOL("state", state),
             NULL

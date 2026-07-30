@@ -105,13 +105,10 @@ io_read(struct io_read *ctx, int timeout)
         }
         else if (r > 0)
         {
-            if (!ctx->no_data)
+            if (!xarray_concat_io(&ctx->data, ctx->buf, r))
             {
-                if (!xarray_concat_io(&ctx->data, ctx->buf, r))
-                {
-                    log_errerror("Out of memory!");
-                    goto fail;
-                }
+                log_errerror("Out of memory!");
+                goto fail;
             }
             ctx->data_callback(ctx->buf, r, ctx->callback_udata);
         }
@@ -249,7 +246,7 @@ io_recv(int fd, uint8_t *buf, size_t len, int *scm_fd, bool *poll)
 
     struct cmsghdr *chdr = need_scm ? CMSG_FIRSTHDR(&msgh) : NULL;
 
-    if (need_scm)
+    if (need_scm && chdr != NULL)
     {
         if (chdr->cmsg_len != CMSG_LEN(sizeof(int)) ||
             chdr->cmsg_level != SOL_SOCKET || chdr->cmsg_type != SCM_RIGHTS)
@@ -307,7 +304,7 @@ io_send(int fd, uint8_t *buf, size_t len, int scm_fd, bool *poll)
                 return -1;
             }
             log_errerror("Error sending message to fd %d", fd);
-            return false;
+            return -1;
         }
         else if (w == 0)
             // I guess exit?
@@ -325,7 +322,7 @@ io_send(int fd, uint8_t *buf, size_t len, int scm_fd, bool *poll)
 int
 create_lock(const char *path, int *lock_fd)
 {
-    int fd = open(path, O_RDWR | O_CREAT);
+    int fd = open(path, O_RDWR | O_CREAT, 0644);
 
     if (fd == -1)
     {
