@@ -671,7 +671,7 @@ main(int argc, char **argv)
             break;
         case 'v':
             printf("%s\n", PROJECT_VERSION);
-            break;
+            return EXIT_SUCCESS;
         default:
             free(config);
             free(db_file);
