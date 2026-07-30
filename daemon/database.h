@@ -58,6 +58,9 @@ struct database
         sqlite3_stmt *get_entries;
 
         sqlite3_stmt *get_history_size;
+        sqlite3_stmt *id_exists;
+
+        sqlite3_stmt *del_entry;
     } stmt;
 };
 
@@ -82,4 +85,6 @@ bool database_get_mime_types(struct database *db, int64_t id, db_mime_type_callb
 sqlite3_blob *database_get_data(struct database *db, int64_t id, const char *mime_type);
 bool database_get_entries(struct database *db, int64_t start, int64_t n, db_entry_callback callback, void *udata);
 int64_t database_get_history_size(struct database *db);
+bool database_id_exists(struct database *db, int64_t id);
+bool database_delete_entry(struct database *db, int64_t id);
 // clang-format on

@@ -70,7 +70,9 @@ static const struct stmt_def stmt_defs[] = {
         get_entries,
         "SELECT Id, Creation_time, Update_time, Pinned FROM Entries "
         "ORDER BY Id DESC LIMIT ? OFFSET ?;"
-    )
+    ),
+    STMT(id_exists, "SELECT 1 FROM Entries WHERE Id = ?;"),
+    STMT(del_entry, "DELETE FROM Entries WHERE Id = ?;")
 };
 
 static bool
@@ -604,6 +606,8 @@ database_get_history_size(struct database *db)
 {
     sqlite3_stmt *stmt = db->stmt.get_history_size;
 
+    assert(!sqlite3_stmt_busy(stmt));
+
     int ret = sqlite3_step(stmt);
 
     if (ret != SQLITE_ROW)
@@ -618,4 +622,44 @@ database_get_history_size(struct database *db)
     int64_t n = sqlite3_column_int64(stmt, 0);
     sqlite3_reset(stmt);
     return n;
+}
+
+bool
+database_id_exists(struct database *db, int64_t id)
+{
+    sqlite3_stmt *stmt = db->stmt.id_exists;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    sqlite3_bind_int64(stmt, 1, id);
+
+    int ret = sqlite3_step(stmt);
+
+    sqlite3_reset(stmt);
+    if (ret == SQLITE_ROW)
+        return true;
+    else if (ret == SQLITE_DONE)
+        return false;
+
+    log_warn("Error checking if id exists: %s", sqlite3_errmsg(db->handle));
+    return false;
+}
+
+bool
+database_delete_entry(struct database *db, int64_t id)
+{
+    sqlite3_stmt *stmt = db->stmt.del_entry;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    sqlite3_bind_int64(stmt, 1, id);
+
+    int ret = sqlite3_step(stmt);
+
+    sqlite3_reset(stmt);
+    if (ret == SQLITE_DONE)
+        return true;
+
+    log_warn("Error deleting entry: %s", sqlite3_errmsg(db->handle));
+    return false;
 }

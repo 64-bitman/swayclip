@@ -544,6 +544,48 @@ request_callback(
 
         ipc_client_send(client, json_object_new_object(), fd);
     }
+    else if (strcmp(type, IPC_REQ_SET_SELECTION) == 0)
+    {
+        int64_t id;
+
+        if (!extract_json_object(req->payload, JSON_INT("id", &id), NULL))
+        {
+            ipc_client_send_error(client, IPC_INVALID_ARGS);
+            return;
+        }
+
+        // Check if ID exists first
+        if (!database_id_exists(&state->db, id))
+        {
+            ipc_client_send_error(
+                client, "Entry id %" PRId64 " does not exist", id
+            );
+            return;
+        }
+
+        state->id = id;
+        wayland_set(&state->wayland, NULL);
+
+        ipc_client_send_success(client);
+    }
+    else if (strcmp(type, IPC_REQ_DELETE_ENTRY) == 0)
+    {
+        int64_t id;
+
+        if (!extract_json_object(req->payload, JSON_INT("id", &id), NULL))
+        {
+            ipc_client_send_error(client, IPC_INVALID_ARGS);
+            return;
+        }
+
+        if (!database_delete_entry(&state->db, id))
+        {
+            ipc_client_send_error(client, IPC_DB_ERROR);
+            return;
+        }
+
+        ipc_client_send_success(client);
+    }
     else
         ipc_client_send_error(client, IPC_INVALID_ARGS);
 }
