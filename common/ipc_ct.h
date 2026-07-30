@@ -83,6 +83,7 @@ struct ipc_ct
 typedef void (*ipc_msg_callback)(struct ipc_message *msg, void *udata);
 
 // clang-format off
+char *get_ipc_path(void);
 bool ipc_ct_init(struct ipc_ct *ict, int fd);
 void ipc_ct_uninit(struct ipc_ct *ict);
 bool ipc_ct_read(struct ipc_ct *ict, bool need_scm, ipc_msg_callback callback, void *udata);

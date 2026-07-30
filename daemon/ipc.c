@@ -169,48 +169,20 @@ ipc_init(
     char *path;
     char *lock_path;
 
-    const char *socket_path = getenv("SWAYCLIP_SOCK");
+    path = get_ipc_path();
+    if (path == NULL)
+        return false;
 
-    if (socket_path == NULL)
+    lock_path = xstrdup_printf("%s.lock", path);
+    if (lock_path == NULL)
     {
-        char *dir = xdg_get_base_dir(XDG_RUNTIME_DIR, NULL);
-
-        if (dir == NULL)
-            return false;
-        if (mkdir(dir, 0755) == -1 && errno != EEXIST)
-        {
-            log_errerror("Error creating directory '%s'", dir);
-            free(dir);
-            return false;
-        }
-
-        const char *display = getenv("WAYLAND_DISPLAY");
-
-        if (display == NULL)
-        {
-            // Shouldn't happen, because we initialize wayland connection before
-            // this.
-            free(dir);
-            return false;
-        }
-
-        // Get basename of display in case it is a path
-        const char *s = strrchr(display, '/');
-        if (s != NULL)
-            display = s + 1;
-
-        path = xstrdup_printf("%s/swayclip.%s", dir, display);
-        lock_path = xstrdup_printf("%s/swayclip.%s.lock", dir, display);
-        free(dir);
-    }
-    else
-    {
-        path = strdup(socket_path);
-        lock_path = xstrdup_printf("%s.lock", socket_path);
+        log_errerror("Error allocating IPC lock path");
+        free(path);
+        return false;
     }
 
     // Check if socket exists. If so, then check if it is actually used by a
-    // process, and if so, delete it.
+    // process, and if not, delete it.
     pid_t pid = lock_is_locked(lock_path);
 
     if (pid == 0)
@@ -273,6 +245,8 @@ ipc_init(
 
     ipc->callback = callback;
     ipc->callback_udata = udata;
+
+    log_debug("Initialized IPC server at \"%s\"", path);
 
     return true;
 fail2:

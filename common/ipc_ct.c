@@ -19,6 +19,7 @@
 #include "ipc_ct.h"
 #include "io.h"
 #include "log.h"
+#include "xdg.h"
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -28,6 +29,52 @@
 #define HEADER_SIZE (1 + (int)sizeof(uint32_t))
 
 xarray_create(uint8_t, write, uint32_t, 128, 2.0);
+
+char *
+get_ipc_path(void)
+{
+    char *path;
+
+    const char *socket_path = getenv("SWAYCLIP_SOCK");
+
+    if (socket_path == NULL)
+    {
+        char *dir = xdg_get_base_dir(XDG_RUNTIME_DIR, NULL);
+
+        if (dir == NULL)
+        {
+            log_error("$XDG_RUNTIME_DIR not set in environment");
+            return NULL;
+        }
+
+        const char *display = getenv("WAYLAND_DISPLAY");
+
+        if (display == NULL)
+        {
+            log_error("$WAYLAND_DISPLAY not set in environment");
+            free(dir);
+            return NULL;
+        }
+
+        // Get basename of display in case it is a path
+        const char *s = strrchr(display, '/');
+        if (s != NULL)
+            display = s + 1;
+
+        path = xstrdup_printf("%s/swayclip.%s", dir, display);
+        free(dir);
+    }
+    else
+        path = strdup(socket_path);
+
+    if (path == NULL)
+    {
+        log_errerror("Error allocating IPC socket path");
+        return NULL;
+    }
+
+    return path;
+}
 
 /*
  * "fd" should be non blocking
