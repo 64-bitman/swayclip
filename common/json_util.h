@@ -30,6 +30,7 @@
 #define JSON_DOUBLE(k, v) k, 'd', v
 #define JSON_INT(k, v) k, 'i', v
 #define JSON_OBJ(k, v) k, 'o', v
+#define JSON_ARRAY(k, v) k, 'a', v
 #define JSON_STR(k, v) k, 's', v
 #define JSON_STRL(k, v) k, 'S', v
 

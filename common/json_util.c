@@ -86,6 +86,7 @@ build_json_object(struct json_object *obj, int add_flags, ...)
             );
             break;
         case 'o':
+        case 'a':
         {
             struct json_object *val = va_arg(ap, struct json_object *);
 
@@ -152,21 +153,38 @@ extract_json_object(struct json_object *obj, ...)
         switch (type)
         {
         case 'b':
+            if (!json_object_is_type(val, json_type_boolean))
+                goto exit;
             *(va_arg(ap, bool *)) = json_object_get_boolean(val);
             break;
         case 'd':
+            if (!json_object_is_type(val, json_type_double))
+                goto exit;
             *(va_arg(ap, double *)) = json_object_get_double(val);
             break;
         case 'i':
+            if (!json_object_is_type(val, json_type_int))
+                goto exit;
             *(va_arg(ap, int64_t *)) = json_object_get_int64(val);
             break;
         case 'o':
+            if (!json_object_is_type(val, json_type_object))
+                goto exit;
+            *(va_arg(ap, struct json_object **)) = val;
+            break;
+        case 'a':
+            if (!json_object_is_type(val, json_type_array))
+                goto exit;
             *(va_arg(ap, struct json_object **)) = val;
             break;
         case 's':
+            if (!json_object_is_type(val, json_type_string))
+                goto exit;
             *(va_arg(ap, const char **)) = json_object_get_string(val);
             break;
         case 'S':
+            if (!json_object_is_type(val, json_type_string))
+                goto exit;
             *(va_arg(ap, const char **)) = json_object_get_string(val);
             *(va_arg(ap, int *)) = json_object_get_string_len(val);
             break;
