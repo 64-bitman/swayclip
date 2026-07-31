@@ -304,7 +304,10 @@ selection_event(
     }
 
     log_debug(
-        "New selection event for %s selection: %p", selection_str(sel), offer
+        "New selection event for \"%s\" %s selection: %p",
+        seat->name,
+        selection_str(sel),
+        offer
     );
 
     if (sel->ext_data_offer != NULL)

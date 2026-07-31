@@ -171,7 +171,10 @@ wsignal_selection(
     }
 
     if (xarray_len_mime_type(mime_types) == 0)
+    {
+        log_debug("Selection event has no allowed mime types, ignoring");
         return;
+    }
 
     if (!database_do_transaction(&state->db, DB_TRANSACTION_IMMEDIATE))
         return;
