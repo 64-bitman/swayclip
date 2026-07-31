@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include "util.h"
 #include <json.h>
 #include <stdbool.h>
 
@@ -33,6 +34,6 @@
 #define JSON_STRL(k, v) k, 'S', v
 
 // clang-format off
-struct json_object *build_json_object(struct json_object *obj, int add_flags, ...);
-bool extract_json_object(struct json_object *obj, ...);
+struct json_object *build_json_object(struct json_object *obj, int add_flags, ...) SENTINEL;
+bool extract_json_object(struct json_object *obj, ...) SENTINEL;
 // clang-format on
