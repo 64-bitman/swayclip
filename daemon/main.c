@@ -216,17 +216,15 @@ wsignal_selection(
             .callback_udata = &data_sha_ctx,
         };
 
-        if (!io_read(&ctx, 3000))
+        if (!io_read(&ctx, 3000, state->config.max_size))
+        {
+            close(fd);
             goto exit;
+        }
 
         close(fd);
 
         struct xarray_io *data = &ctx.data;
-
-        // Check if data is bigger than configured max size. Shouldn't need to
-        // worry about integer overflow, because that is checked in io_read().
-        if (xarray_len_io(data) > (uint64_t)state->config.max_size)
-            goto exit;
 
         sha256_final(&data_sha_ctx, data_id);
 

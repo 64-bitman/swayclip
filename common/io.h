@@ -21,6 +21,7 @@
 #include "xarray.h"
 #include <time.h>
 
+// If changing "len" type, update io_read()!
 xarray_create(uint8_t, io, uint32_t, 4096, 2);
 struct io_read
 {
@@ -50,7 +51,7 @@ struct io_write
 // clang-format off
 int64_t get_time_ns(clockid_t id);
 bool set_fd_nonblocking(int fd);
-bool io_read(struct io_read *ctx, int timeout);
+bool io_read(struct io_read *ctx, int timeout, size_t max_bytes);
 bool io_write(struct io_write *ctx, int timeout);
 ssize_t io_recv(int fd, uint8_t *buf, size_t len, int *scm_fd, bool *poll);
 ssize_t io_send(int buf, uint8_t *bf, size_t len, int scm_fd, bool *poll);

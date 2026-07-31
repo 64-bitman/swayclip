@@ -289,11 +289,13 @@ ipc_emit_event(struct ipc *ipc, uint event, struct json_object *msg)
     xlist_foreach(ipc_client, &ipc->connections, client)
     {
         if (client->events & event)
+        {
             ipc_ct_write_msg(
                 &client->ict, IPC_MESSAGE_EVENT, json_object_get(msg), -1
             );
+            (void)eventloop_mod(ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
+        }
     }
-    (void)eventloop_mod(ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
     json_object_put(msg);
 }
 

@@ -58,10 +58,11 @@ set_fd_nonblocking(int fd)
 
 /*
  * Start reading data from the context, with the given timeout in milliseconds.
- * If timed out, then false is returned.
+ * If timed out, then false is returned. "max_bytes" is the maximum amount of
+ * bytes to be received until error (limited by UINT32_MAX).
  */
 bool
-io_read(struct io_read *ctx, int timeout)
+io_read(struct io_read *ctx, int timeout, size_t max_bytes)
 {
     struct pollfd pfd = {.fd = ctx->fd, .events = POLLIN};
 
@@ -94,6 +95,13 @@ io_read(struct io_read *ctx, int timeout)
             continue;
 
         ssize_t r = read(ctx->fd, ctx->buf, ctx->bufsize);
+        size_t total = xarray_len_io(&ctx->data) + r;
+
+        if (total > max_bytes || total > UINT32_MAX)
+        {
+            log_error("Data too large!");
+            goto fail;
+        }
 
         if (r == -1)
         {
