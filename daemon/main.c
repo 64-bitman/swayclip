@@ -813,15 +813,18 @@ request_callback(
 static void
 help(void)
 {
+    // clang-format off
     printf("Usage: swayclip [OPTIONS]\n");
     printf("\n");
     printf("Options:\n");
     printf("  -l, --logfile <path>      File to write log messages to\n");
     printf("  -c, --config <path>       File to parse config\n");
+    printf("  -d, --ready               Print \"Ready\" when fully initialized\n");
     printf("  -s, --db <path>           File to place SQLite database\n");
     printf("  -d, --debug               Enable debug log messages\n");
     printf("  -h, --help                Show this help message\n");
     printf("  -v, --version             Show version\n");
+    // clang-format on
 }
 
 int
