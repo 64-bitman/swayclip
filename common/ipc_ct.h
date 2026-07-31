@@ -30,7 +30,7 @@
 #define IPC_REQ_PIN_ENTRY "pin_entry"
 #define IPC_REQ_SYNC "sync"
 
-// Make sure to update IPC request handler
+// Make sure to update IPC request handler (for daemon)
 #define IPC_EVENT_ENTRY_ADD "entry_add"
 #define IPC_EVENT_FLAG_ENTRY_ADD 1
 #define IPC_EVENT_ENTRY_DELETE "entry_delete"
@@ -41,6 +41,8 @@
 #define IPC_EVENT_FLAG_ENTRY_MOVE 8
 #define IPC_EVENT_CLIPBOARD_STATE "clipboard_state"
 #define IPC_EVENT_FLAG_CLIPBOARD_STATE 16
+#define IPC_EVENT_SYNC "sync"
+#define IPC_EVENT_FLAG_SYNC 32
 
 enum ipc_message_type
 {

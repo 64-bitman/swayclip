@@ -420,6 +420,21 @@ ipc_event_clipboard_state(struct ipc *ipc, int64_t entry_id, bool state)
     );
 }
 
+/*
+ * Used for the "sync" IPC request.
+ */
+void
+ipc_event_sync(struct ipc *ipc)
+{
+    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_SYNC))
+        return;
+    ipc_emit_event(
+        ipc,
+        IPC_EVENT_FLAG_SYNC,
+        build_json_object(NULL, -1, JSON_STR("event", IPC_EVENT_SYNC), NULL)
+    );
+}
+
 void
 ipc_client_send(struct ipc_client *client, struct json_object *msg, int scm_fd)
 {
@@ -457,6 +472,17 @@ ipc_client_send_success(struct ipc_client *client)
         IPC_MESSAGE_CALL,
         build_json_object(NULL, -1, JSON_STR("type", "success"), NULL),
         -1
+    );
+}
+
+void
+ipc_client_send_success_fd(struct ipc_client *client, int scm_fd)
+{
+    ipc_ct_write_msg(
+        &client->ict,
+        IPC_MESSAGE_CALL,
+        build_json_object(NULL, -1, JSON_STR("type", "success"), NULL),
+        scm_fd
     );
 }
 

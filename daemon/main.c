@@ -73,6 +73,9 @@ struct state
     // entry set, or if "cleared" is true, then clipboard is cleared.
     int64_t id;
     bool    cleared;
+
+    // If "sync" event should be emitted
+    bool need_sync;
 };
 
 static bool
@@ -160,6 +163,12 @@ wsignal_selection(
 )
 {
     struct state *state = udata;
+
+    if (state->need_sync)
+    {
+        ipc_event_sync(&state->ipc);
+        state->need_sync = false;
+    }
 
     if (xarray_len_mime_type(mime_types) == 0)
         return;
@@ -552,7 +561,9 @@ request_callback(
     {
         struct json_object *arr;
 
-        if (!extract_json_object(req->payload, JSON_OBJ("events", &arr), NULL))
+        if (!extract_json_object(
+                req->payload, JSON_ARRAY("events", &arr), NULL
+            ))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
             return;
@@ -581,6 +592,8 @@ request_callback(
                 events |= IPC_EVENT_FLAG_ENTRY_MOVE;
             else if (strcmp(event, IPC_EVENT_CLIPBOARD_STATE) == 0)
                 events |= IPC_EVENT_FLAG_CLIPBOARD_STATE;
+            else if (strcmp(event, IPC_EVENT_SYNC) == 0)
+                events |= IPC_EVENT_FLAG_SYNC;
             else
             {
                 ipc_client_send_error(client, "Unknown event \"%s\"", event);
@@ -701,7 +714,7 @@ request_callback(
             return;
         }
 
-        ipc_client_send(client, json_object_new_object(), fd);
+        ipc_client_send_success_fd(client, fd);
     }
     else if (strcmp(type, IPC_REQ_SET_CLIPBOARD) == 0)
     {
@@ -784,39 +797,10 @@ request_callback(
     }
     else if (strcmp(type, IPC_REQ_SYNC) == 0)
     {
-        // Send back a success response after at least one Wayland event is
-        // dispatched. Used for testing only.
-        struct pollfd pfd = {.fd = state->wayland.wct.fd, .events = POLLIN};
-        while (true)
-        {
-            int ret = poll(&pfd, 1, 1000); // 1 second timeout
-
-            if (ret == -1)
-            {
-                if (errno == EINTR)
-                    continue;
-                ipc_client_send_error(client, "Connection error");
-                return;
-            }
-            if (ret == 0)
-            {
-                ipc_client_send_error(client, "Timed out");
-                return;
-            }
-            if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
-            {
-                ipc_client_send_error(client, "Connection closed");
-                return;
-            }
-
-            if (!wayland_ct_dispatch(&state->wayland.wct))
-            {
-                ipc_client_send_error(client, "Error dispatching events");
-                return;
-            }
-            ipc_client_send_success(client);
-            break;
-        }
+        // Send back a "sync" event after a selection event is received. Used
+        // for testing only.
+        state->need_sync = true;
+        ipc_client_send_success(client);
     }
     else
         ipc_client_send_error(client, IPC_INVALID_ARGS);
