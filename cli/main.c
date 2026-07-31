@@ -25,6 +25,8 @@
 
 static struct ipc_ct ict;
 
+xarray_create(char, input, uint32_t, 256, 2.0);
+
 static void
 help(void)
 {
@@ -32,7 +34,6 @@ help(void)
     printf("\n");
     printf("Commands:\n");
     printf("  list      List entries in clipboard history\n");
-    printf("  get       Get information of entry\n");
     printf("  set       Set current entry\n");
     printf("  delete    Delete entry\n");
     printf("  pin       Pin entry\n");
@@ -114,6 +115,32 @@ message_callback(struct ipc_message *imsg, void *udata)
         log_warn("Error allocating auxillary data");
 }
 
+static bool
+read_msgs(ipc_msg_callback callback, void *udata)
+{
+    struct pollfd pfd = {.fd = ict.fd, .events = POLLIN};
+
+    int ret = poll(&pfd, 1, -1);
+
+    if (ret == -1)
+    {
+        if (errno == EINTR)
+            return true;
+        log_errerror("Error reading IPC response");
+        return false;
+    }
+
+    if (pfd.revents & POLLIN)
+        if (!ipc_ct_read(&ict, true, callback, udata))
+            return false;
+    if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
+    {
+        log_error("IPC connection closed");
+        return false;
+    }
+    return true;
+}
+
 /*
  * Ownership of "req" is taken. Return true on success and false on fatal error.
  */
@@ -128,23 +155,8 @@ roundtrip(struct json_object *req, struct message *msg)
     memset(msg, 0, sizeof(*msg));
 
     while (msg->obj == NULL)
-    {
-        struct pollfd pfd = {.fd = ict.fd, .events = POLLIN};
-
-        int ret = poll(&pfd, 1, -1);
-
-        if (ret == -1)
-        {
-            if (errno == EINTR)
-                continue;
-            log_errerror("Error reading IPC response");
+        if (!read_msgs(message_callback, msg))
             return false;
-        }
-
-        if (pfd.revents & POLLIN)
-            if (!ipc_ct_read(&ict, true, message_callback, msg))
-                return false;
-    }
 
     return true;
 }
@@ -240,6 +252,46 @@ text_escape(const char *str, size_t len)
     return out;
 }
 
+/*
+ * Return true is JSON response is success
+ */
+bool
+is_success(struct json_object *resp)
+{
+    struct json_object *j_success;
+
+    json_object_object_get_ex(resp, "type", &j_success);
+    if (!json_object_is_type(j_success, json_type_string))
+        return false;
+    return strcmp(json_object_get_string(j_success), "success") == 0;
+}
+
+/*
+ * Read stdin until EOF
+ */
+struct xarray_input
+read_stdin(void)
+{
+    static char buf[256];
+
+    struct xarray_input arr;
+
+    xarray_init_input(&arr);
+
+    while (true)
+    {
+        ssize_t r = read(STDIN_FILENO, buf, sizeof(buf));
+
+        CHECK(r != -1 && errno != EINTR);
+        if (r == -1 && errno == EINTR)
+            continue;
+        if (r == 0)
+            break;
+        CHECK(xarray_concat_input(&arr, buf, r));
+    }
+    return arr;
+}
+
 static void
 help_list(void)
 {
@@ -264,7 +316,7 @@ command_list(int argc, char **argv)
         {"json", no_argument, 0, 'j'},
         {"start", required_argument, 0, 's'},
         {"number", required_argument, 0, 'n'},
-        {"help", required_argument, 0, 'h'},
+        {"help", no_argument, 0, 'h'},
         {NULL, 0, 0, 0}
     };
 
@@ -317,7 +369,10 @@ command_list(int argc, char **argv)
 
     if (json)
     {
-        printf("%s\n", json_object_to_json_string(resp.obj));
+        printf(
+            "%s\n",
+            json_object_to_json_string_ext(resp.obj, JSON_C_TO_STRING_PLAIN)
+        );
         goto exit;
     }
 
@@ -417,13 +472,13 @@ static bool
 command_len(int argc, char **argv)
 {
     static const struct option options[] = {
-        {"help", required_argument, 0, 'h'}, {NULL, 0, 0, 0}
+        {"help", no_argument, 0, 'h'}, {NULL, 0, 0, 0}
     };
 
     int c;
     int idx;
 
-    while ((c = getopt_long(argc, argv, "s:n:h", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "h", options, &idx)) != -1)
     {
         switch (c)
         {
@@ -456,6 +511,313 @@ command_len(int argc, char **argv)
     printf("%" PRId64 "\n", size);
 
     message_clear(&resp);
+
+    return true;
+}
+
+static void
+help_set(void)
+{
+    // clang-format off
+    printf("Usage: swctl set [OPTIONS] [ID]\n");
+    printf("\n");
+    printf("Set clipboard to entry\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("  -c, --clear       Clear clipboard\n");
+    printf("  -d, --decode      Decode format used by \"swctl list\" from stdin\n");
+    printf("  -h, --help        Show this help message\n");
+    // clang-format on
+}
+
+static bool
+command_set(int argc, char **argv)
+{
+    static const struct option options[] = {
+        {"clear", no_argument, 0, 'c'},
+        {"decode", no_argument, 0, 'd'},
+        {"help", no_argument, 0, 'h'},
+        {NULL, 0, 0, 0}
+    };
+
+    int c;
+    int idx;
+
+    bool    clear = false;
+    bool    decode = false;
+    int64_t id = -1;
+
+    while ((c = getopt_long(argc, argv, "+dh", options, &idx)) != -1)
+    {
+        switch (c)
+        {
+        case 'c':
+            clear = true;
+            break;
+        case 'd':
+            decode = true;
+            break;
+        case 'h':
+            help_set();
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    if (!init_ipc(&ict))
+        return false;
+
+    if (decode)
+    {
+        struct xarray_input in = read_stdin();
+
+        if (xarray_len_input(&in) == 0)
+            // Ignore empty input
+            return false;
+
+        id = strtol(xarray_data_input(&in), NULL, 10);
+        xarray_uninit_input(&in);
+    }
+    else if (!clear)
+    {
+        if (argv[optind] == NULL)
+            return false;
+        id = strtol(argv[optind], NULL, 10);
+    }
+
+    struct message resp;
+
+    CHECK(roundtrip(
+        build_json_object(
+            NULL,
+            -1,
+            JSON_STR("type", IPC_REQ_SET_CLIPBOARD),
+            JSON_INT("id", id),
+            NULL
+        ),
+        &resp
+    ));
+
+    bool success = is_success(resp.obj);
+
+    message_clear(&resp);
+
+    return success;
+}
+
+static void
+help_delete(void)
+{
+    // clang-format off
+    printf("Usage: swctl delete [OPTIONS] <ID>\n");
+    printf("\n");
+    printf("Delete entry with ID from clipboard history.\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("  -h, --help        Show this help message\n");
+    // clang-format on
+}
+
+static bool
+command_delete(int argc, char **argv)
+{
+    static const struct option options[] = {
+        {"help", no_argument, 0, 'h'}, {NULL, 0, 0, 0}
+    };
+
+    int c;
+    int idx;
+
+    while ((c = getopt_long(argc, argv, "+h", options, &idx)) != -1)
+    {
+        switch (c)
+        {
+        case 'h':
+            help_delete();
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    if (!init_ipc(&ict))
+        return false;
+
+    if (argv[optind] == NULL)
+        return false;
+
+    int64_t id = strtol(argv[optind], NULL, 10);
+
+    struct message resp;
+
+    CHECK(roundtrip(
+        build_json_object(
+            NULL,
+            -1,
+            JSON_STR("type", IPC_REQ_DELETE_ENTRY),
+            JSON_INT("id", id),
+            NULL
+        ),
+        &resp
+    ));
+
+    bool success = is_success(resp.obj);
+
+    message_clear(&resp);
+
+    return success;
+}
+
+static void
+help_pin(void)
+{
+    // clang-format off
+    printf("Usage: swctl pin [OPTIONS] <ID>\n");
+    printf("\n");
+    printf("Pin entry to prevent it from being automatically removed.\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("  -u, --unpin       Unpin entry\n");
+    printf("  -h, --help        Show this help message\n");
+    // clang-format on
+}
+
+static bool
+command_pin(int argc, char **argv)
+{
+    static const struct option options[] = {
+        {"unpin", no_argument, 0, 'u'},
+        {"help", no_argument, 0, 'h'},
+        {NULL, 0, 0, 0}
+    };
+
+    int c;
+    int idx;
+
+    bool pin = true;
+
+    while ((c = getopt_long(argc, argv, "+hu", options, &idx)) != -1)
+    {
+        switch (c)
+        {
+        case 'u':
+            pin = false;
+            break;
+        case 'h':
+            help_pin();
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    if (!init_ipc(&ict))
+        return false;
+
+    if (argv[optind] == NULL)
+        return false;
+
+    int64_t id = strtol(argv[optind], NULL, 10);
+
+    struct message resp;
+
+    CHECK(roundtrip(
+        build_json_object(
+            NULL,
+            -1,
+            JSON_STR("type", IPC_REQ_PIN_ENTRY),
+            JSON_INT("id", id),
+            JSON_BOOL("pin", pin),
+            NULL
+        ),
+        &resp
+    ));
+
+    bool success = is_success(resp.obj);
+
+    message_clear(&resp);
+
+    return success;
+}
+
+static void
+help_events(void)
+{
+    // clang-format off
+    printf("Usage: swctl events [OPTIONS] <events>\n");
+    printf("\n");
+    printf("Output JSON stream of events.\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("  -h, --help        Show this help message\n");
+    // clang-format on
+}
+
+static void
+event_callback(struct ipc_message *imsg, void *udata UNUSED)
+{
+    printf(
+        "%s\n",
+        json_object_to_json_string_ext(imsg->payload, JSON_C_TO_STRING_PLAIN)
+    );
+}
+
+static bool
+command_events(int argc, char **argv)
+{
+    static const struct option options[] = {
+        {"help", no_argument, 0, 'h'}, {NULL, 0, 0, 0}
+    };
+
+    int c;
+    int idx;
+
+    while ((c = getopt_long(argc, argv, "h", options, &idx)) != -1)
+    {
+        switch (c)
+        {
+        case 'h':
+            help_events();
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    if (!init_ipc(&ict))
+        return false;
+
+    struct json_object *arr = json_object_new_array();
+
+    CHECK(arr != NULL);
+
+    for (char **p = argv + optind; *p != NULL; p++)
+        json_object_array_add(arr, json_object_new_string(*p));
+
+    struct message resp;
+
+    CHECK(roundtrip(
+        build_json_object(
+            NULL,
+            -1,
+            JSON_STR("type", IPC_REQ_SUBSCRIBE),
+            JSON_OBJ("events", arr),
+            NULL
+        ),
+        &resp
+    ));
+
+    bool success = is_success(resp.obj);
+
+    message_clear(&resp);
+
+    if (!success)
+        return false;
+
+    while (true)
+        if (!read_msgs(event_callback, NULL))
+            return false;
 
     return true;
 }
@@ -507,6 +869,14 @@ main(int argc, char **argv)
         ret = command_list(sub_argc, sub_argv);
     else if (strcmp(cmd, "len") == 0)
         ret = command_len(sub_argc, sub_argv);
+    else if (strcmp(cmd, "set") == 0)
+        ret = command_set(sub_argc, sub_argv);
+    else if (strcmp(cmd, "delete") == 0)
+        ret = command_delete(sub_argc, sub_argv);
+    else if (strcmp(cmd, "pin") == 0)
+        ret = command_pin(sub_argc, sub_argv);
+    else if (strcmp(cmd, "events") == 0)
+        ret = command_events(sub_argc, sub_argv);
     else
     {
         log_error("Unknown subcommand \"%s\"", cmd);
