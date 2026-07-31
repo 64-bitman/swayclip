@@ -28,6 +28,7 @@
 #include "wayland.h"
 #include <fcntl.h>
 #include <getopt.h>
+#include <limits.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -73,9 +74,6 @@ struct state
     // entry set, or if "cleared" is true, then clipboard is cleared.
     int64_t id;
     bool    cleared;
-
-    // If "sync" event should be emitted
-    bool need_sync;
 };
 
 static bool
@@ -367,15 +365,6 @@ exit:
     }
     else if (!ignore)
         state->id = -1;
-
-    // Do this last and flush right before, so that compositor state is up to
-    // date with ours, before anything else is done.
-    wayland_ct_flush(&state->wayland.wct);
-    if (state->need_sync)
-    {
-        ipc_event_sync(&state->ipc);
-        state->need_sync = false;
-    }
 }
 
 static bool
@@ -596,8 +585,6 @@ request_callback(
                 events |= IPC_EVENT_FLAG_ENTRY_MOVE;
             else if (strcmp(event, IPC_EVENT_CLIPBOARD_STATE) == 0)
                 events |= IPC_EVENT_FLAG_CLIPBOARD_STATE;
-            else if (strcmp(event, IPC_EVENT_SYNC) == 0)
-                events |= IPC_EVENT_FLAG_SYNC;
             else
             {
                 ipc_client_send_error(client, "Unknown event \"%s\"", event);
@@ -801,10 +788,21 @@ request_callback(
     }
     else if (strcmp(type, IPC_REQ_SYNC) == 0)
     {
-        // Send back a "sync" event after a selection event (only from enabled
-        // selections) is received. Used for testing only.
-        state->need_sync = true;
-        ipc_client_send_success(client);
+        // Block the IPC response until at least "n" Wayland events have been
+        // dispatched. Only used for testing.
+        int64_t n;
+
+        if (!extract_json_object(req->payload, JSON_INT("n", &n), NULL) ||
+            n <= 0 || n > INT_MAX)
+        {
+            ipc_client_send_error(client, IPC_INVALID_ARGS);
+            return;
+        }
+
+        if (wayland_ct_dispatch(&state->wayland.wct, (int)n, 1000))
+            ipc_client_send_success(client);
+        else
+            ipc_client_send_error(client, "Error dispatching events");
     }
     else
         ipc_client_send_error(client, IPC_INVALID_ARGS);
@@ -919,13 +917,6 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    struct wayland_signals wsignals = {
-        .selection = {.callback = wsignal_selection, .callback_udata = &state},
-        .send = {.callback = wsignal_send, .callback_udata = &state},
-        .set = {.callback = wsignal_set, .callback_udata = &state},
-        .can_set = {.callback = wsignal_can_set, .callback_udata = &state}
-    };
-
     ret = database_init(&state.db, db_file, &state.config);
     free(db_file);
     if (!ret)
@@ -934,6 +925,13 @@ main(int argc, char **argv)
         eventloop_uninit(&state.loop);
         return EXIT_FAILURE;
     }
+
+    struct wayland_signals wsignals = {
+        .selection = {.callback = wsignal_selection, .callback_udata = &state},
+        .send = {.callback = wsignal_send, .callback_udata = &state},
+        .set = {.callback = wsignal_set, .callback_udata = &state},
+        .can_set = {.callback = wsignal_can_set, .callback_udata = &state},
+    };
 
     if (!wayland_init(&state.wayland, wsignals, &state.loop, &state.config))
     {

@@ -279,12 +279,16 @@ ipc_uninit(struct ipc *ipc)
 }
 
 static void
-ipc_emit_event(struct ipc *ipc, uint event, struct json_object *msg)
+ipc_emit_event(
+    struct ipc *ipc, const char *str, uint event, struct json_object *msg
+)
 {
     struct ipc_client *client;
 
     if (msg == NULL)
         return;
+
+    log_debug("Emitting event \"%s\"", str);
 
     xlist_foreach(ipc_client, &ipc->connections, client)
     {
@@ -320,6 +324,7 @@ ipc_event_entry_add(struct ipc *ipc, int64_t entry_id)
         return;
     ipc_emit_event(
         ipc,
+        IPC_EVENT_ENTRY_ADD,
         IPC_EVENT_FLAG_ENTRY_ADD,
         build_json_object(
             NULL,
@@ -338,6 +343,7 @@ ipc_event_entry_delete(struct ipc *ipc, int64_t entry_id)
         return;
     ipc_emit_event(
         ipc,
+        IPC_EVENT_ENTRY_DELETE,
         IPC_EVENT_FLAG_ENTRY_DELETE,
         build_json_object(
             NULL,
@@ -377,7 +383,9 @@ ipc_event_entry_update(
         build_json_object(msg, -1, JSON_BOOL("pinned", *pinned), NULL);
     if (update_time != NULL)
         build_json_object(msg, -1, JSON_INT("update_time", *update_time), NULL);
-    ipc_emit_event(ipc, IPC_EVENT_FLAG_ENTRY_UPDATE, msg);
+    ipc_emit_event(
+        ipc, IPC_EVENT_ENTRY_UPDATE, IPC_EVENT_FLAG_ENTRY_UPDATE, msg
+    );
 }
 
 void
@@ -387,6 +395,7 @@ ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos)
         return;
     ipc_emit_event(
         ipc,
+        IPC_EVENT_ENTRY_MOVE,
         IPC_EVENT_FLAG_ENTRY_MOVE,
         build_json_object(
             NULL,
@@ -410,6 +419,7 @@ ipc_event_clipboard_state(struct ipc *ipc, int64_t entry_id, bool state)
         return;
     ipc_emit_event(
         ipc,
+        IPC_EVENT_CLIPBOARD_STATE,
         IPC_EVENT_FLAG_CLIPBOARD_STATE,
         build_json_object(
             NULL,
@@ -419,21 +429,6 @@ ipc_event_clipboard_state(struct ipc *ipc, int64_t entry_id, bool state)
             JSON_BOOL("state", state),
             NULL
         )
-    );
-}
-
-/*
- * Used for the "sync" IPC request.
- */
-void
-ipc_event_sync(struct ipc *ipc)
-{
-    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_SYNC))
-        return;
-    ipc_emit_event(
-        ipc,
-        IPC_EVENT_FLAG_SYNC,
-        build_json_object(NULL, -1, JSON_STR("event", IPC_EVENT_SYNC), NULL)
     );
 }
 

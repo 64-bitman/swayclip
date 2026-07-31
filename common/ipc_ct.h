@@ -41,8 +41,6 @@
 #define IPC_EVENT_FLAG_ENTRY_MOVE 8
 #define IPC_EVENT_CLIPBOARD_STATE "clipboard_state"
 #define IPC_EVENT_FLAG_CLIPBOARD_STATE 16
-#define IPC_EVENT_SYNC "sync"
-#define IPC_EVENT_FLAG_SYNC 32
 
 enum ipc_message_type
 {

@@ -296,6 +296,8 @@ selection_event(
     struct selection                 *sel
 )
 {
+    struct wayland_signals *signals = &seat->wayland->signals;
+
     if (!sel->enabled)
     {
         if (offer != NULL)
@@ -370,8 +372,6 @@ selection_event(
             sel->null_timerfd = fd;
         return;
     }
-
-    struct wayland_signals *signals = &seat->wayland->signals;
 
     signals->selection.callback(
         sel, offer, &seat->mime_types, signals->selection.callback_udata

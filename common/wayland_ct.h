@@ -38,5 +38,5 @@ struct wayland_ct
 bool wayland_ct_init(struct wayland_ct *wct, struct eventloop *loop);
 void wayland_ct_uninit(struct wayland_ct *wct);
 bool wayland_ct_flush(struct wayland_ct *wct);
-bool wayland_ct_dispatch(struct wayland_ct *wct);
+bool wayland_ct_dispatch(struct wayland_ct *wct, int n, int timeout);
 // clang-format on
