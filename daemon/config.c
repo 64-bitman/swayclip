@@ -147,7 +147,7 @@ config_init(struct config *config, const char *file)
 
     *config = (struct config){
         .max_entries = 100,
-        .max_size = 10000000, // 10 MB
+        .max_size = 20000000, // 20 MB
         .persist = true,
         .regular = true,
         .primary = true,
