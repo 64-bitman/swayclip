@@ -38,6 +38,7 @@ struct config_option
 #define CONFIG_OPT(k, t, s, c)                                                 \
     (struct config_option) { .key = k, .type = t, .store = s, .callback = c }
 #define CONFIG_STRING(k, s) CONFIG_OPT(k, TOML_STRING, s, config_extract_string)
+#define CONFIG_STRING_CUSTOM(k, s, c) CONFIG_OPT(k, TOML_STRING, s, c)
 #define CONFIG_INT64(k, s) CONFIG_OPT(k, TOML_INT64, s, config_extract_int64)
 #define CONFIG_INT64_POS(k, s)                                                 \
     CONFIG_OPT(k, TOML_INT64, s, config_extract_int64_pos)

@@ -21,7 +21,6 @@
 #include "common/ipc_ct.h"
 #include "common/json_util.h"
 #include "common/log.h"
-#include "common/xdg.h"
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -376,6 +375,25 @@ ipc_event_entry_update(
     if (update_time != NULL)
         build_json_object(msg, -1, JSON_INT("update_time", *update_time), NULL);
     ipc_emit_event(ipc, IPC_EVENT_FLAG_ENTRY_UPDATE, msg);
+}
+
+void
+ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos)
+{
+    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_CLIPBOARD_STATE))
+        return;
+    ipc_emit_event(
+        ipc,
+        IPC_EVENT_FLAG_CLIPBOARD_STATE,
+        build_json_object(
+            NULL,
+            -1,
+            JSON_STR("event", IPC_EVENT_ENTRY_MOVE),
+            JSON_INT("id", entry_id),
+            JSON_INT("old_pos", old_pos),
+            NULL
+        )
+    );
 }
 
 /*

@@ -33,6 +33,13 @@ struct config_seat
 };
 xarray_create(struct config_seat, config_seat, uint32_t, 4, 1.5);
 
+enum config_dedup
+{
+    DEDUP_NONE,
+    DEDUP_PREV,
+    DEDUP_ALL
+};
+
 struct config
 {
     // Maximum number of entries to store in database, must be > 0
@@ -48,6 +55,12 @@ struct config
     // Default values for any seat
     bool regular;
     bool primary;
+
+    // Setting for deduplication of entries.
+    // "none" - don't deduplicate entries
+    // "prev" - only check previous entry
+    // "all" - Deduplicate all matching entries in history
+    enum config_dedup dedup;
 
     // Array of seats that the user has configured. If empty then allow any
     // seat.

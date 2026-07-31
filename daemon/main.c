@@ -72,11 +72,6 @@ struct state
     // entry set, or if "cleared" is true, then clipboard is cleared.
     int64_t id;
     bool    cleared;
-
-    // Hash of last/most recent selection event. Used to check if a new
-    // selection event is the same in terms of mime types and data.
-    uint8_t selection_hash[SHA256_BLOCK_SIZE];
-    bool    selection_hash_init; // If "selection_hash" is initialized
 };
 
 static bool
@@ -175,6 +170,9 @@ wsignal_selection(
     SHA256_CTX sha_ctx;
     int64_t    id = database_new_entry(&state->db);
     bool       ret = false;
+    bool       ignore = false;
+    bool       moved = false;
+    int64_t    old_pos; // Only set if "mvoed" is true
 
     if (id == -1)
         goto exit;
@@ -250,53 +248,101 @@ wsignal_selection(
         }
     }
 
-    uint8_t sel_hash[SHA256_BLOCK_SIZE];
+    uint8_t entry_hash[SHA256_BLOCK_SIZE];
 
-    sha256_final(&sha_ctx, sel_hash);
+    sha256_final(&sha_ctx, entry_hash);
 
-    bool ignore = false;
-
-    // Check if selection event is the same as the prior selection event. If
-    // so, then ignore it.
-    if (state->selection_hash_init &&
-        memcmp(sel_hash, state->selection_hash, SHA256_BLOCK_SIZE) == 0)
+    switch (state->config.dedup)
     {
-        log_debug("Selection is same as previous, ignoring");
-        ret = false;
-        ignore = true;
-    }
-    else
-    {
-        memcpy(state->selection_hash, sel_hash, SHA256_BLOCK_SIZE);
-        (void)database_save_setting(
-            &state->db,
-            DB_SETTING_SELECTION_HASH,
-            'b',
-            sel_hash,
-            SHA256_BLOCK_SIZE
-        );
-        state->selection_hash_init = true;
+    case DEDUP_NONE:
+        // Add entry normally
         ret = true;
+        break;
+    case DEDUP_PREV:
+    {
+        int64_t pos = database_entry_hash_pos(&state->db, entry_hash, NULL);
+
+        if (pos == 0)
+        {
+            // Previous entry has same entry hash, ignore
+            ret = false;
+            ignore = true;
+        }
+        else if (pos > 0)
+            // Entry with the same hash exists but it is not the previous one,
+            // set its hash to NULL so that UNIQUE constraint is ok.
+            ret = database_set_entry_hash(&state->db, -1, entry_hash);
+        break;
     }
+    case DEDUP_ALL:
+    {
+        int64_t dup_id;
+        old_pos = database_entry_hash_pos(&state->db, entry_hash, &dup_id);
+
+        if (old_pos == -1)
+        {
+            // Nothing to deduplicate
+            ret = true;
+            break;
+        }
+
+        if (old_pos == 0)
+        {
+            // Previous entry has same hash, just ignore, no need to move
+            ret = false;
+            ignore = true;
+            break;
+        }
+
+        // Move entry to front of history. Must do this later, so we can
+        // rollback the current transaction.
+        moved = true;
+        ret = false;
+        id = dup_id;
+        break;
+    }
+    default:
+        log_abort("Unknown dedup value %d", state->config.dedup);
+    }
+
+    if (ret && !database_set_entry_hash(&state->db, id, entry_hash))
+        ret = false;
 
 exit:
     database_do_transaction(
         &state->db, ret ? DB_TRANSACTION_COMMIT : DB_TRANSACTION_ROLLBACK
     );
 
+    if (moved)
+    {
+        ret = database_update_sort_index(&state->db, id);
+        ignore = true;
+    }
+
     if (ret)
     {
         // Save content type and mime type for that content type
-        assert(content_mime != NULL);
-        (void)database_save_attribute(
-            &state->db, id, DB_ATTRIBUTE_CONTENT_TYPE, 's', content_names[ctype]
-        );
-        (void)database_save_attribute(
-            &state->db, id, DB_ATTRIBUTE_CONTENT_MIME, 's', content_mime
-        );
+        if (moved)
+        {
+            ipc_event_entry_move(&state->ipc, id, old_pos);
+        }
+        else
+        {
+            assert(content_mime != NULL);
+            (void)database_save_attribute(
+                &state->db,
+                id,
+                DB_ATTRIBUTE_CONTENT_TYPE,
+                's',
+                content_names[ctype]
+            );
+            (void)database_save_attribute(
+                &state->db, id, DB_ATTRIBUTE_CONTENT_MIME, 's', content_mime
+            );
 
+            ipc_event_entry_add(&state->ipc, id);
+        }
         state->id = id;
-        ipc_event_entry_add(&state->ipc, id);
 
         // Do not become the source client for the selection that the event came
         // from.
@@ -856,14 +902,6 @@ main(int argc, char **argv)
         goto exit;
     }
 
-    state.selection_hash_init = database_get_setting(
-        &state.db,
-        DB_SETTING_SELECTION_HASH,
-        'b',
-        state.selection_hash,
-        SHA256_BLOCK_SIZE,
-        NULL
-    );
     if (!database_get_setting(&state.db, DB_SETTING_LAST_ENTRY, 'i', &state.id))
         state.id = -1;
     state.cleared = false;

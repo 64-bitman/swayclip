@@ -118,6 +118,25 @@ extract_pattern_array(const char *key, toml_datum_t dat, void *store)
     return true;
 }
 
+static bool
+extract_dedup(const char *key UNUSED, toml_datum_t dat, void *store)
+{
+    enum config_dedup *setting = store;
+
+    if (strcmp(dat.u.s, "none") == 0)
+        *setting = DEDUP_NONE;
+    else if (strcmp(dat.u.s, "prev") == 0)
+        *setting = DEDUP_PREV;
+    else if (strcmp(dat.u.s, "all") == 0)
+        *setting = DEDUP_ALL;
+    else
+    {
+        log_error("Unknown dedup setting \"%s\" in config", dat.u.s);
+        return false;
+    }
+    return true;
+}
+
 bool
 config_init(struct config *config, const char *file)
 {
@@ -131,7 +150,8 @@ config_init(struct config *config, const char *file)
         .max_size = 10000000, // 10 MB
         .persist = true,
         .regular = true,
-        .primary = true
+        .primary = true,
+        .dedup = DEDUP_ALL
     };
 
     xarray_init_config_seat(&config->configured_seats);
@@ -154,7 +174,8 @@ config_init(struct config *config, const char *file)
             "daemon.mime_types.blocked",
             &config->blocked_mime_types,
             extract_pattern_array
-        )
+        ),
+        CONFIG_STRING_CUSTOM("daemon.dedup", &config->dedup, extract_dedup)
     };
 
     bool ret = config_extract(result.toptab, opts, N_ELEMENTS(opts));

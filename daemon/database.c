@@ -49,8 +49,8 @@ static const struct stmt_def stmt_defs[] = {
 
     STMT(
         new_entry,
-        "INSERT INTO Entries (Creation_time, Update_time, Pinned) VALUES (?, "
-        "?, FALSE) Returning Id;"
+        "INSERT INTO Entries (Creation_time, Update_time, Pinned) "
+        "VALUES (?, ?, FALSE) Returning Id;"
     ),
     STMT(
         new_mime_type,
@@ -69,7 +69,7 @@ static const struct stmt_def stmt_defs[] = {
     STMT(
         get_entries,
         "SELECT Id, Creation_time, Update_time, Pinned FROM Entries "
-        "ORDER BY Id DESC LIMIT ? OFFSET ?;"
+        "ORDER BY Sort_index DESC LIMIT ? OFFSET ?;"
     ),
     STMT(id_exists, "SELECT 1 FROM Entries WHERE Id = ?;"),
     STMT(del_entry, "DELETE FROM Entries WHERE Id = ?;"),
@@ -86,6 +86,23 @@ static const struct stmt_def stmt_defs[] = {
     STMT(
         get_attribute,
         "SELECT json_extract(Attributes, ?) FROM Entries WHERE Id = ?;"
+    ),
+    STMT(
+        // Either Id or Hash can be provided, but not both.
+        save_entry_hash,
+        "UPDATE Entries SET Hash = ? WHERE Id = ? OR Hash = ?;"
+    ),
+    STMT(
+        // Return the position of the matching entry
+        entry_hash_pos,
+        "SELECT Id, (SELECT COUNT(1) FROM Entries AS e2 WHERE e2.Sort_index > "
+        "e.Sort_index) - 1 As Position FROM Entries AS e WHERE e.Hash IS NOT "
+        "NULL AND e.Hash = ?;"
+    ),
+    STMT(
+        update_sort_index,
+        "UPDATE Entries SET Sort_index = (SELECT COALESCE(MAX(Sort_index), 0) "
+        "+ 1 FROM Entries) WHERE Id = ?;"
     )
 };
 
@@ -814,4 +831,102 @@ database_get_attribute(
     sqlite3_reset(stmt);
 
     return true;
+}
+
+/*
+ * Set the entry hash as a blob. If "id" is -1, then NULL the Hash column of
+ * every entry with matching hash "hash".
+ */
+bool
+database_set_entry_hash(
+    struct database *db, int64_t id, uint8_t hash[SHA256_BLOCK_SIZE]
+)
+{
+    sqlite3_stmt *stmt = db->stmt.save_entry_hash;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    if (id == -1)
+    {
+        sqlite3_bind_null(stmt, 1);
+        sqlite3_bind_null(stmt, 2);
+        sqlite3_bind_blob(stmt, 1, hash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
+    }
+    else
+    {
+        sqlite3_bind_blob(stmt, 1, hash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
+        sqlite3_bind_int64(stmt, 2, id);
+        sqlite3_bind_null(stmt, 3);
+    }
+
+    int ret = sqlite3_step(stmt);
+
+    sqlite3_reset(stmt);
+    if (ret != SQLITE_DONE)
+    {
+        log_error("Error saving entry hash: %s", sqlite3_errmsg(db->handle));
+        return false;
+    }
+
+    return true;
+}
+
+/*
+ * Return position (and optionally id) of entry with hash "hash", and -1 if no
+ * entry with the hash or if an error occured.
+ */
+int64_t
+database_entry_hash_pos(
+    struct database *db, uint8_t hash[SHA256_BLOCK_SIZE], int64_t *id
+)
+{
+    sqlite3_stmt *stmt = db->stmt.entry_hash_pos;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    sqlite3_bind_blob(stmt, 1, hash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
+
+    int ret = sqlite3_step(stmt);
+
+    if (ret != SQLITE_ROW)
+    {
+        if (ret != SQLITE_DONE)
+            log_error(
+                "Error getting position of entry hash: %s",
+                sqlite3_errmsg(db->handle)
+            );
+        sqlite3_reset(stmt);
+        return -1;
+    }
+
+    int64_t idval = sqlite3_column_int64(stmt, 0);
+    int64_t pos = sqlite3_column_int64(stmt, 1);
+
+    if (id != NULL)
+        *id = idval;
+
+    sqlite3_reset(stmt);
+    return pos;
+}
+
+/*
+ * Update the sort index of the given entry so that it is at the front of the
+ * clipboard history.
+ */
+bool
+database_update_sort_index(struct database *db, int64_t id)
+{
+    sqlite3_stmt *stmt = db->stmt.update_sort_index;
+
+    assert(!sqlite3_stmt_busy(stmt));
+    sqlite3_bind_int64(stmt, 1, id);
+
+    int ret = sqlite3_step(stmt);
+
+    sqlite3_reset(stmt);
+    if (ret == SQLITE_DONE)
+        return true;
+
+    log_error("Error updating sort index: %s", sqlite3_errmsg(db->handle));
+    return false;
 }

@@ -33,10 +33,16 @@ CREATE TABLE IF NOT EXISTS Settings (
 ) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS Entries (
+    -- Unique identifier for this specific entry, not guaranteed to be contiguous
     Id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- Used to order entries, may be updated (should always be greater than
+        -- zero). Not guaranteed to be contiguous
+    Sort_index      INTEGER NOT NULL UNIQUE DEFAULT 0,
     Creation_time   INTEGER NOT NULL, -- In milliseconds since unix epoch
     Update_time     INTEGER NOT NULL, -- Same thing
     Pinned          INTEGER NOT NULL CHECK (Pinned IN (0, 1)),
+    -- Unique identifier for the *contents* of this entry. If NULL then ignore
+    Hash            BLOB UNIQUE,
     Attributes      TEXT NOT NULL DEFAULT '{}' -- JSON data
 ) STRICT;
 
@@ -50,22 +56,21 @@ CREATE TABLE IF NOT EXISTS Mime_types (
     FOREIGN KEY (Data_id) REFERENCES Data(Data_id) ON DELETE RESTRICT
 ) STRICT, WITHOUT ROWID;
 
-CREATE INDEX IF NOT EXISTS idx_mime_types_data_id ON Mime_types (Data_id);
-
 CREATE TABLE IF NOT EXISTS Data (
     Data_id         BLOB CHECK (LENGTH(Data_id) = 32) NOT NULL UNIQUE,
     Data            BLOB NOT NULL
 ) STRICT; -- rowid needed for incremental blob i/o
 
-CREATE INDEX IF NOT EXISTS idx_entries_pinned_creation
-ON Entries (Pinned, Id DESC);
+CREATE INDEX IF NOT EXISTS idx_mime_types_data_id ON Mime_types (Data_id);
+CREATE INDEX IF NOT EXISTS idx_entries_pinned_creation ON Entries (Pinned, Id DESC);
 
+-- Don't trim pinned entries
 CREATE TRIGGER IF NOT EXISTS trim_entries
 AFTER INSERT ON Entries
 WHEN (SELECT Value FROM Settings WHERE Key = 'Max_entries') IS NOT NULL BEGIN
     DELETE FROM Entries WHERE Id IN (
         SELECT Id FROM Entries WHERE Pinned = 0
-        ORDER BY Id DESC LIMIT -1 OFFSET (
+        ORDER BY Sort_index DESC LIMIT -1 OFFSET (
             SELECT CAST(Value AS INTEGER) FROM Settings WHERE Key = 'Max_entries'
         )
     );
@@ -83,4 +88,14 @@ AFTER UPDATE OF Data_id ON Mime_types
 WHEN OLD.Data_id IS NOT NULL AND OLD.Data_id IS NOT NEW.Data_id BEGIN
     DELETE FROM Data WHERE Data_id = OLD.Data_id
     AND NOT EXISTS (SELECT 1 FROM Mime_types WHERE Data_id = OLD.Data_id);
+END;
+
+-- Automatically increment the sort index on each insertion
+CREATE TRIGGER IF NOT EXISTS set_sort_index
+AFTER INSERT ON Entries
+WHEN NEW.Sort_index = 0
+BEGIN
+    UPDATE Entries
+    SET Sort_index = (SELECT COALESCE(MAX(Sort_index), 0) + 1 FROM Entries WHERE Id != NEW.Id)
+    WHERE Id = NEW.Id;
 END;

@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include "common/sha256/sha256.h"
 #include "config.h"
 #include <sqlite3.h>
 #include <stdbool.h>
@@ -64,11 +65,16 @@ struct database
 
         sqlite3_stmt *save_attribute;
         sqlite3_stmt *get_attribute;
+
+        sqlite3_stmt *save_entry_hash;
+        sqlite3_stmt *entry_hash_pos;
+        sqlite3_stmt *entry_hash_id;
+
+        sqlite3_stmt *update_sort_index;
     } stmt;
 };
 
 #define DB_SETTING_MAX_ENTRIES "Max_entries"
-#define DB_SETTING_SELECTION_HASH "Selection_hash"
 #define DB_SETTING_LAST_ENTRY "Last_entry"
 
 #define DB_ATTRIBUTE_CONTENT_TYPE "$.content_type"
@@ -96,4 +102,7 @@ bool database_delete_entry(struct database *db, int64_t id);
 int64_t database_update_entry(struct database *db, int64_t id, const bool *pinned);
 bool database_save_attribute(struct database *db, int64_t id, const char *key, int type, ...);
 bool database_get_attribute(struct database *db, int64_t id, const char *key, int type, ...);
+bool database_set_entry_hash(struct database *db, int64_t id, uint8_t hash[SHA256_BLOCK_SIZE]);
+int64_t database_entry_hash_pos(struct database *db, uint8_t hash[SHA256_BLOCK_SIZE], int64_t *id);
+bool database_update_sort_index(struct database *db, int64_t id);
 // clang-format on
