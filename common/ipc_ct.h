@@ -25,10 +25,11 @@
 #define IPC_REQ_GET_HISTORY_LENGTH "get_history_length"
 #define IPC_REQ_GET_ENTRIES "get_entries"
 #define IPC_REQ_GET_DATA "get_data"
-#define IPC_REQ_SET_SELECTION "set_selection"
+#define IPC_REQ_SET_CLIPBOARD "set_clipboard"
 #define IPC_REQ_DELETE_ENTRY "delete_entry"
 #define IPC_REQ_PIN_ENTRY "pin_entry"
 
+// Make sure to update IPC request handler
 #define IPC_EVENT_ENTRY_ADD "entry_add"
 #define IPC_EVENT_FLAG_ENTRY_ADD 1
 #define IPC_EVENT_ENTRY_DELETE "entry_delete"

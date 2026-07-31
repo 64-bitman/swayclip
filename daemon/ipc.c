@@ -293,6 +293,7 @@ ipc_emit_event(struct ipc *ipc, uint event, struct json_object *msg)
                 &client->ict, IPC_MESSAGE_EVENT, json_object_get(msg), -1
             );
     }
+    (void)eventloop_mod(ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
     json_object_put(msg);
 }
 
@@ -380,11 +381,11 @@ ipc_event_entry_update(
 void
 ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos)
 {
-    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_CLIPBOARD_STATE))
+    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_MOVE))
         return;
     ipc_emit_event(
         ipc,
-        IPC_EVENT_FLAG_CLIPBOARD_STATE,
+        IPC_EVENT_FLAG_ENTRY_MOVE,
         build_json_object(
             NULL,
             -1,

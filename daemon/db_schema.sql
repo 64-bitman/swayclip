@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS Data (
 ) STRICT; -- rowid needed for incremental blob i/o
 
 CREATE INDEX IF NOT EXISTS idx_mime_types_data_id ON Mime_types (Data_id);
-CREATE INDEX IF NOT EXISTS idx_entries_pinned_creation ON Entries (Pinned, Id DESC);
+CREATE INDEX IF NOT EXISTS idx_entries_pinned_sort ON Entries (Pinned, Sort_index DESC);
 
 -- Don't trim pinned entries
 CREATE TRIGGER IF NOT EXISTS trim_entries

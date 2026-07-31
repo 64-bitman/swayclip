@@ -142,14 +142,15 @@ selection_set(struct selection *sel)
     struct wayland *wayland = sel->seat->wayland;
     bool            clear = false;
 
-    log_debug(
-        "Setting %s selection for seat \"%s\"",
-        selection_str(sel),
-        sel->seat->name
-    );
-
     struct ext_data_control_source_v1 *source = wayland->signals.set.callback(
         wayland->ext_data_mgr, &clear, wayland->signals.set.callback_udata
+    );
+
+    log_debug(
+        "Setting %s selection for seat \"%s\" to %p",
+        selection_str(sel),
+        sel->seat->name,
+        source
     );
 
     if (!clear && source == NULL)

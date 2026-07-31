@@ -262,6 +262,10 @@ wsignal_selection(
     {
         int64_t pos = database_entry_hash_pos(&state->db, entry_hash, NULL);
 
+        if (pos == -1)
+            break;
+
+        pos--;
         if (pos == 0)
         {
             // Previous entry has same entry hash, ignore
@@ -285,6 +289,10 @@ wsignal_selection(
             ret = true;
             break;
         }
+
+        // Must exclude the currently in progress entry, since that will offset
+        // the position by 1, so subtract 1.
+        old_pos--;
 
         if (old_pos == 0)
         {
@@ -537,10 +545,9 @@ request_callback(
 
     if (strcmp(type, IPC_REQ_SUBSCRIBE) == 0)
     {
-        struct json_object *arr =
-            json_object_object_get(req->payload, "events");
+        struct json_object *arr;
 
-        if (arr == NULL)
+        if (!extract_json_object(req->payload, JSON_OBJ("events", &arr), NULL))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
             return;
@@ -565,6 +572,8 @@ request_callback(
                 events |= IPC_EVENT_FLAG_ENTRY_DELETE;
             else if (strcmp(event, IPC_EVENT_ENTRY_UPDATE) == 0)
                 events |= IPC_EVENT_FLAG_ENTRY_UPDATE;
+            else if (strcmp(event, IPC_EVENT_ENTRY_MOVE) == 0)
+                events |= IPC_EVENT_FLAG_ENTRY_MOVE;
             else if (strcmp(event, IPC_EVENT_CLIPBOARD_STATE) == 0)
                 events |= IPC_EVENT_FLAG_CLIPBOARD_STATE;
             else
@@ -575,6 +584,7 @@ request_callback(
         }
 
         ipc_client_set_events(client, events);
+        ipc_client_send_success(client);
     }
     else if (strcmp(type, IPC_REQ_GET_HISTORY_LENGTH) == 0)
     {
@@ -688,7 +698,7 @@ request_callback(
 
         ipc_client_send(client, json_object_new_object(), fd);
     }
-    else if (strcmp(type, IPC_REQ_SET_SELECTION) == 0)
+    else if (strcmp(type, IPC_REQ_SET_CLIPBOARD) == 0)
     {
         int64_t id;
 
@@ -698,8 +708,8 @@ request_callback(
             return;
         }
 
-        // Check if ID exists first
-        if (!database_id_exists(&state->db, id))
+        // Check if ID exists first (unless -1, then clear clipboard)
+        if (id != -1 && !database_id_exists(&state->db, id))
         {
             ipc_client_send_error(
                 client, "Entry id %" PRId64 " does not exist", id
@@ -708,6 +718,8 @@ request_callback(
         }
 
         state->id = id;
+        if (id == -1)
+            state->cleared = true;
         set(state, NULL);
 
         ipc_client_send_success(client);
@@ -719,6 +731,14 @@ request_callback(
         if (!extract_json_object(req->payload, JSON_INT("id", &id), NULL))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
+            return;
+        }
+
+        if (!database_id_exists(&state->db, id))
+        {
+            ipc_client_send_error(
+                client, "Entry id %" PRId64 " does not exist", id
+            );
             return;
         }
 
@@ -741,6 +761,14 @@ request_callback(
             ))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
+            return;
+        }
+
+        if (!database_id_exists(&state->db, id))
+        {
+            ipc_client_send_error(
+                client, "Entry id %" PRId64 " does not exist", id
+            );
             return;
         }
 
