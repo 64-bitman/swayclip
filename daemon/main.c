@@ -164,12 +164,6 @@ wsignal_selection(
 {
     struct state *state = udata;
 
-    if (state->need_sync)
-    {
-        ipc_event_sync(&state->ipc);
-        state->need_sync = false;
-    }
-
     if (xarray_len_mime_type(mime_types) == 0)
     {
         log_debug("Selection event has no allowed mime types, ignoring");
@@ -375,6 +369,15 @@ exit:
     }
     else if (!ignore)
         state->id = -1;
+
+    // Do this last and flush right before, so that compositor state is up to
+    // date with ours, before anything else is done.
+    wayland_ct_flush(&state->wayland.wct);
+    if (state->need_sync)
+    {
+        ipc_event_sync(&state->ipc);
+        state->need_sync = false;
+    }
 }
 
 static bool
@@ -800,8 +803,8 @@ request_callback(
     }
     else if (strcmp(type, IPC_REQ_SYNC) == 0)
     {
-        // Send back a "sync" event after a selection event is received. Used
-        // for testing only.
+        // Send back a "sync" event after a selection event (only from enabled
+        // selections) is received. Used for testing only.
         state->need_sync = true;
         ipc_client_send_success(client);
     }
