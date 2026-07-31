@@ -152,7 +152,14 @@ ipc_ct_read(
         bool    poll = false;
         int    *scm_ptr = need_scm ? &ict->scm_fd : NULL;
 
-        r = io_recv(ict->fd, ict->buf, ict->pending_size, scm_ptr, &poll);
+        r = io_recv(
+            ict->fd,
+            ict->buf,
+            MIN(sizeof(ict->buf), ict->pending_size),
+            scm_ptr,
+            &poll
+        );
+
         if (r == -1)
             return poll;
 
