@@ -206,6 +206,9 @@ data_offer_event_offer(
     struct seat   *seat = udata;
     struct config *config = seat->wayland->config;
 
+    if (seat->blocked)
+        return;
+
     // Do not save entry if mime type is configured to be blocked.
     if (xarray_len_regex(&config->blocked_mime_types) > 0 &&
         match_regex_array(&config->blocked_mime_types, mime_type))
