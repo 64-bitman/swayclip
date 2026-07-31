@@ -39,6 +39,23 @@
 #define IPC_DB_ERROR "Database error"
 #define IPC_MEM_ERROR "Memory error"
 
+// Content types with a larger value are prioritized over others (except
+// CONTENT_UNKNOWN).
+enum content_type
+{
+    CONTENT_UNKNOWN,
+    CONTENT_BINARY,
+    CONTENT_TEXT,
+    CONTENT_IMAGE
+};
+
+static const char *content_names[] = {
+    [CONTENT_UNKNOWN] = "unknown",
+    [CONTENT_BINARY] = "binary",
+    [CONTENT_TEXT] = "text",
+    [CONTENT_IMAGE] = "image"
+};
+
 struct state
 {
     struct eventloop loop;
@@ -104,7 +121,7 @@ set(struct state *state, struct selection *ignore)
         ipc_event_clipboard_state(&state->ipc, state->id, false);
 
     if (database_save_setting(
-            &state->db, DB_SETTING_LAST_ENTRY, SQLITE_INTEGER, state->id
+            &state->db, DB_SETTING_LAST_ENTRY, 'i', state->id
         ))
         wayland_set(&state->wayland, ignore);
     else
@@ -123,6 +140,19 @@ read_callback(uint8_t *buf, ssize_t r, void *udata)
     SHA256_CTX *sha_ctx = udata;
 
     sha256_update(sha_ctx, (BYTE *)buf, r);
+}
+
+/*
+ * Get the content type from the mime type.
+ */
+static enum content_type
+get_content_type(const char *mime_type)
+{
+    if (strncmp(mime_type, "image/", 6) == 0)
+        return CONTENT_IMAGE;
+    if (strncmp(mime_type, "text/", 5) == 0)
+        return CONTENT_TEXT;
+    return CONTENT_BINARY;
 }
 
 static void
@@ -154,6 +184,11 @@ wsignal_selection(
     char   *mime_type;
     uint8_t data_id[SHA256_BLOCK_SIZE];
 
+    enum content_type ctype = CONTENT_UNKNOWN;
+    const char       *content_mime = NULL;
+
+    // Receive the contents of every mime type and add them to the database. The
+    // filtering of mime types is done in wayland.c
     xarray_foreach_val(mime_type, mime_types, mime_type)
     {
         int fd = wayland_get_offer_fd(&state->wayland, offer, mime_type);
@@ -205,6 +240,14 @@ wsignal_selection(
         xarray_uninit_io(data);
         if (!ret)
             goto exit;
+
+        enum content_type m_ctype = get_content_type(mime_type);
+
+        if (m_ctype > ctype)
+        {
+            ctype = m_ctype;
+            content_mime = mime_type;
+        }
     }
 
     uint8_t sel_hash[SHA256_BLOCK_SIZE];
@@ -228,7 +271,7 @@ wsignal_selection(
         (void)database_save_setting(
             &state->db,
             DB_SETTING_SELECTION_HASH,
-            SQLITE_BLOB,
+            'b',
             sel_hash,
             SHA256_BLOCK_SIZE
         );
@@ -243,11 +286,20 @@ exit:
 
     if (ret)
     {
+        // Save content type and mime type for that content type
+        assert(content_mime != NULL);
+        (void)database_save_attribute(
+            &state->db, id, DB_ATTRIBUTE_CONTENT_TYPE, 's', content_names[ctype]
+        );
+        (void)database_save_attribute(
+            &state->db, id, DB_ATTRIBUTE_CONTENT_MIME, 's', content_mime
+        );
+
         state->id = id;
         ipc_event_entry_add(&state->ipc, id);
 
-        // Don't want to set the source selection, let the original source
-        // client be.
+        // Do not become the source client for the selection that the event came
+        // from.
         set(state, sel);
     }
     else if (!ignore)
@@ -396,6 +448,26 @@ get_entry_callback(
         JSON_OBJ("mime_types", mime_types),
         NULL
     );
+
+    // Add content type and content mime type
+    static char buf[256];
+    if (!database_get_attribute(
+            db, id, DB_ATTRIBUTE_CONTENT_TYPE, 's', buf, sizeof(buf)
+        ))
+    {
+        json_object_put(obj);
+        return;
+    }
+    (void)build_json_object(obj, -1, JSON_STR("content_type", buf), NULL);
+
+    if (!database_get_attribute(
+            db, id, DB_ATTRIBUTE_CONTENT_MIME, 's', buf, sizeof(buf)
+        ))
+    {
+        json_object_put(obj);
+        return;
+    }
+    (void)build_json_object(obj, -1, JSON_STR("content_mime_type", buf), NULL);
 
     if (json_object_array_add(arr, obj) == -1)
         json_object_put(obj);
@@ -787,14 +859,12 @@ main(int argc, char **argv)
     state.selection_hash_init = database_get_setting(
         &state.db,
         DB_SETTING_SELECTION_HASH,
-        SQLITE_BLOB,
+        'b',
         state.selection_hash,
         SHA256_BLOCK_SIZE,
         NULL
     );
-    if (!database_get_setting(
-            &state.db, DB_SETTING_LAST_ENTRY, SQLITE_INTEGER, &state.id
-        ))
+    if (!database_get_setting(&state.db, DB_SETTING_LAST_ENTRY, 'i', &state.id))
         state.id = -1;
     state.cleared = false;
 

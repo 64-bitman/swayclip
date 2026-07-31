@@ -76,7 +76,16 @@ static const struct stmt_def stmt_defs[] = {
     STMT(
         update_entry,
         "UPDATE Entries SET Update_time = ?, Pinned = COALESCE(?, Pinned) "
-        "WHERE Id = ?"
+        "WHERE Id = ?;"
+    ),
+    STMT(
+        save_attribute,
+        "UPDATE Entries SET Attributes = json_set(COALESCE(Attributes, '{}'), "
+        "?, ?) WHERE Id = ?;"
+    ),
+    STMT(
+        get_attribute,
+        "SELECT json_extract(Attributes, ?) FROM Entries WHERE Id = ?;"
     )
 };
 
@@ -98,6 +107,7 @@ database_execute_statement(struct database *db, const char *statement)
 bool
 database_init(struct database *db, const char *db_path, struct config *config)
 {
+    // TODO: handle user_version pragma
     char *path;
 
     if (config->persist)
@@ -176,7 +186,7 @@ database_init(struct database *db, const char *db_path, struct config *config)
     }
 
     if (database_save_setting(
-            db, DB_SETTING_MAX_ENTRIES, SQLITE_INTEGER, config->max_entries
+            db, DB_SETTING_MAX_ENTRIES, 'i', config->max_entries
         ))
         // Do an initial trim in case "max_entries" changed.
         (void)database_execute_statement(
@@ -232,10 +242,10 @@ database_save_setting(struct database *db, const char *key, int type, ...)
     va_start(ap, type);
     switch (type)
     {
-    case SQLITE_INTEGER:
+    case 'i':
         sqlite3_bind_int64(stmt, 2, va_arg(ap, int64_t));
         break;
-    case SQLITE_BLOB:
+    case 'b':
     {
         const uint8_t *blob = va_arg(ap, const uint8_t *);
         int            sz = va_arg(ap, int);
@@ -298,10 +308,10 @@ database_get_setting(struct database *db, const char *key, int type, ...)
     va_start(ap, type);
     switch (type)
     {
-    case SQLITE_INTEGER:
+    case 'i':
         *(va_arg(ap, int64_t *)) = sqlite3_column_int64(stmt, 0);
         break;
-    case SQLITE_BLOB:
+    case 'b':
     {
         uint8_t *buf = va_arg(ap, uint8_t *);
         int      sz = va_arg(ap, int);
@@ -623,7 +633,7 @@ database_get_history_size(struct database *db)
 
     if (ret != SQLITE_ROW)
     {
-        log_warn(
+        log_error(
             "Error getting number of entries: %s", sqlite3_errmsg(db->handle)
         );
         sqlite3_reset(stmt);
@@ -652,7 +662,7 @@ database_id_exists(struct database *db, int64_t id)
     else if (ret == SQLITE_DONE)
         return false;
 
-    log_warn("Error checking if id exists: %s", sqlite3_errmsg(db->handle));
+    log_error("Error checking if id exists: %s", sqlite3_errmsg(db->handle));
     return false;
 }
 
@@ -671,7 +681,7 @@ database_delete_entry(struct database *db, int64_t id)
     if (ret == SQLITE_DONE)
         return true;
 
-    log_warn("Error deleting entry: %s", sqlite3_errmsg(db->handle));
+    log_error("Error deleting entry: %s", sqlite3_errmsg(db->handle));
     return false;
 }
 
@@ -702,9 +712,106 @@ database_update_entry(struct database *db, int64_t id, const bool *pinned)
     sqlite3_reset(stmt);
     if (ret != SQLITE_DONE)
     {
-        log_warn("Error updating entry: %s", sqlite3_errmsg(db->handle));
+        log_error("Error updating entry: %s", sqlite3_errmsg(db->handle));
         return -1;
     }
 
     return t;
+}
+
+/*
+ * Save an attribute for the given entry, depending on "type". Note that "key"
+ * must be in JSON path syntax. Returns true on success and false on failuure.
+ */
+bool
+database_save_attribute(
+    struct database *db, int64_t id, const char *key, int type, ...
+)
+{
+    sqlite3_stmt *stmt = db->stmt.save_attribute;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    sqlite3_bind_text(stmt, 1, key, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 3, id);
+
+    va_list ap;
+
+    va_start(ap, type);
+    switch (type)
+    {
+    case 's':
+        sqlite3_bind_text(stmt, 2, va_arg(ap, const char *), -1, SQLITE_STATIC);
+        break;
+    default:
+        log_abort("Unsupported type %d for entry attribute", type);
+    }
+    va_end(ap);
+
+    int ret = sqlite3_step(stmt);
+
+    sqlite3_reset(stmt);
+    if (ret != SQLITE_DONE)
+    {
+        log_error(
+            "Error saving attribute \"%s\": %s", key, sqlite3_errmsg(db->handle)
+        );
+        return false;
+    }
+
+    return true;
+}
+
+/*
+ * Similar to database_get_setting().
+ */
+bool
+database_get_attribute(
+    struct database *db, int64_t id, const char *key, int type, ...
+)
+{
+    sqlite3_stmt *stmt = db->stmt.get_attribute;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    sqlite3_bind_text(stmt, 1, key, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 2, id);
+
+    int ret = sqlite3_step(stmt);
+
+    if (ret != SQLITE_ROW)
+    {
+        if (ret != SQLITE_DONE)
+            log_error(
+                "Error getting attribute \"%s\": %s",
+                key,
+                sqlite3_errmsg(db->handle)
+            );
+        sqlite3_reset(stmt);
+        return false;
+    }
+
+    va_list ap;
+
+    va_start(ap, type);
+    switch (type)
+    {
+    case 's':
+    {
+        char *buf = va_arg(ap, char *);
+        int   sz = va_arg(ap, int);
+
+        const char *text = (char *)sqlite3_column_text(stmt, 0);
+
+        snprintf(buf, sz, "%s", text);
+        break;
+    }
+    default:
+        log_abort("Unsupported type %d for entry attribute", type);
+    }
+
+    va_end(ap);
+    sqlite3_reset(stmt);
+
+    return true;
 }

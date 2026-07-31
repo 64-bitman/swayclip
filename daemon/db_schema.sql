@@ -32,14 +32,12 @@ CREATE TABLE IF NOT EXISTS Settings (
     Value           ANY NOT NULL
 ) WITHOUT ROWID;
 
--- Ensure Max_entries always exists so trim_entries never OFFSETs against NULL.
-INSERT OR IGNORE INTO Settings (Key, Value) VALUES ('Max_entries', 1000);
-
 CREATE TABLE IF NOT EXISTS Entries (
     Id              INTEGER PRIMARY KEY AUTOINCREMENT,
     Creation_time   INTEGER NOT NULL, -- In milliseconds since unix epoch
     Update_time     INTEGER NOT NULL, -- Same thing
-    Pinned          INTEGER NOT NULL CHECK (Pinned IN (0, 1))
+    Pinned          INTEGER NOT NULL CHECK (Pinned IN (0, 1)),
+    Attributes      TEXT NOT NULL DEFAULT '{}' -- JSON data
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS Mime_types (
@@ -52,8 +50,7 @@ CREATE TABLE IF NOT EXISTS Mime_types (
     FOREIGN KEY (Data_id) REFERENCES Data(Data_id) ON DELETE RESTRICT
 ) STRICT, WITHOUT ROWID;
 
-CREATE INDEX IF NOT EXISTS idx_mime_types_data_id
-ON Mime_types (Data_id);
+CREATE INDEX IF NOT EXISTS idx_mime_types_data_id ON Mime_types (Data_id);
 
 CREATE TABLE IF NOT EXISTS Data (
     Data_id         BLOB CHECK (LENGTH(Data_id) = 32) NOT NULL UNIQUE,

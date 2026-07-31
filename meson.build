@@ -28,7 +28,7 @@ endif
 
 wl_dep = dependency('wayland-client')
 json_dep = dependency('json-c')
-sqlite_dep = dependency('sqlite3')
+sqlite_dep = dependency('sqlite3', version: '>=3.38')
 
 xstructs_dep = subproject('xstructs').get_variable('xstructs_dep')
 
