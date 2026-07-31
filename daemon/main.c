@@ -28,6 +28,7 @@
 #include "wayland.h"
 #include <fcntl.h>
 #include <getopt.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -263,7 +264,11 @@ wsignal_selection(
         int64_t pos = database_entry_hash_pos(&state->db, entry_hash, NULL);
 
         if (pos == -1)
+        {
+            // Nothing to deduplicate
+            ret = true;
             break;
+        }
 
         pos--;
         if (pos == 0)
@@ -777,6 +782,42 @@ request_callback(
         else
             ipc_client_send_success(client);
     }
+    else if (strcmp(type, IPC_REQ_SYNC) == 0)
+    {
+        // Send back a success response after at least one Wayland event is
+        // dispatched. Used for testing only.
+        struct pollfd pfd = {.fd = state->wayland.wct.fd, .events = POLLIN};
+        while (true)
+        {
+            int ret = poll(&pfd, 1, 1000); // 1 second timeout
+
+            if (ret == -1)
+            {
+                if (errno == EINTR)
+                    continue;
+                ipc_client_send_error(client, "Connection error");
+                return;
+            }
+            if (ret == 0)
+            {
+                ipc_client_send_error(client, "Timed out");
+                return;
+            }
+            if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
+            {
+                ipc_client_send_error(client, "Connection closed");
+                return;
+            }
+
+            if (!wayland_ct_dispatch(&state->wayland.wct))
+            {
+                ipc_client_send_error(client, "Error dispatching events");
+                return;
+            }
+            ipc_client_send_success(client);
+            break;
+        }
+    }
     else
         ipc_client_send_error(client, IPC_INVALID_ARGS);
 }
@@ -802,6 +843,7 @@ main(int argc, char **argv)
         {"logfile", required_argument, 0, 'l'},
         {"config", required_argument, 0, 'c'},
         {"db", required_argument, 0, 's'},
+        {"ready", no_argument, 0, 'r'},
         {"debug", no_argument, 0, 'd'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'v'},
@@ -813,8 +855,9 @@ main(int argc, char **argv)
     bool  init_log = false;
     char *config = NULL;
     char *db_file = NULL;
+    bool  readymsg = false;
 
-    while ((c = getopt_long(argc, argv, "l:c:s:dhv", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "l:c:s:rdhv", options, &idx)) != -1)
     {
         switch (c)
         {
@@ -829,6 +872,9 @@ main(int argc, char **argv)
         case 's':
             free(db_file);
             db_file = strdup(optarg);
+            break;
+        case 'r':
+            readymsg = true;
             break;
         case 'd':
             log_set_level(LOG_DEBUG);
@@ -930,9 +976,17 @@ main(int argc, char **argv)
         goto exit;
     }
 
+    // We set the selections later when the Wayland seat is started (see
+    // wayland.c)
     if (!database_get_setting(&state.db, DB_SETTING_LAST_ENTRY, 'i', &state.id))
         state.id = -1;
     state.cleared = false;
+
+    if (readymsg)
+    {
+        printf("Ready\n");
+        fflush(stdout);
+    }
 
     ret = eventloop_run(&state.loop);
     log_info("Exiting...");

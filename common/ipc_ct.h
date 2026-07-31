@@ -28,6 +28,7 @@
 #define IPC_REQ_SET_CLIPBOARD "set_clipboard"
 #define IPC_REQ_DELETE_ENTRY "delete_entry"
 #define IPC_REQ_PIN_ENTRY "pin_entry"
+#define IPC_REQ_SYNC "sync"
 
 // Make sure to update IPC request handler
 #define IPC_EVENT_ENTRY_ADD "entry_add"

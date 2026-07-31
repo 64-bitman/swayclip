@@ -146,15 +146,15 @@ selection_set(struct selection *sel)
         wayland->ext_data_mgr, &clear, wayland->signals.set.callback_udata
     );
 
+    if (!clear && source == NULL)
+        return;
+
     log_debug(
         "Setting %s selection for seat \"%s\" to %p",
         selection_str(sel),
         sel->seat->name,
         source
     );
-
-    if (!clear && source == NULL)
-        return;
 
     if (sel->ext_data_source != NULL)
         ext_data_control_source_v1_destroy(sel->ext_data_source);

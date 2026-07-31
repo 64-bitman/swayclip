@@ -86,7 +86,7 @@ wayland_ct_init(struct wayland_ct *wct, struct eventloop *loop)
 
     if (wct->display == NULL)
     {
-        log_error("Error connecting to Wayland display");
+        log_errerror("Error connecting to Wayland display");
         return false;
     }
 
@@ -169,4 +169,20 @@ wayland_ct_flush(struct wayland_ct *wct)
         break;
     }
     return true;
+}
+
+/*
+ * Do a blocking dispatch for any Wayland events. Only used for testing (see
+ * "sync" IPC request).
+ */
+bool
+wayland_ct_dispatch(struct wayland_ct *wct)
+{
+    // If we are preparing for a read, must cancel now to prevent a deadlock.
+    wl_display_cancel_read(wct->display);
+    wct->read_prepared = false;
+
+    // Don't need to prepare for a read, since the prepare callback will be
+    // called before polling.
+    return wl_display_dispatch(wct->display) != -1;
 }
