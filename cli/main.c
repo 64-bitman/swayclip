@@ -34,7 +34,9 @@ help(void)
     printf("\n");
     printf("Commands:\n");
     printf("  list      List entries in clipboard history\n");
+    printf("  len       Get number of entries in history\n");
     printf("  set       Set current entry\n");
+    printf("  get       Get contents of entry\n");
     printf("  delete    Delete entry\n");
     printf("  pin       Pin entry\n");
     printf("  events    Listen for events\n");
@@ -420,10 +422,21 @@ command_list(int argc, char **argv)
         else if (strcmp(content_type, "text") == 0)
         {
             // Set cap at 100 chars/bytes
-            char *str = text_escape(
-                (char *)data_resp.aux_data,
-                MIN((size_t)100, data_resp.aux_data_len)
-            );
+            char *stuff = (char *)data_resp.aux_data;
+
+            if (stuff == NULL)
+            {
+                printf(
+                    "%" PRId64 "\t[[ error %s %s ]]\n",
+                    id,
+                    mime_type,
+                    human_readable_size(data_resp.aux_data_len)
+                );
+                break;
+            }
+
+            char *str =
+                text_escape(stuff, MIN((size_t)100, data_resp.aux_data_len));
 
             printf("%" PRId64 "\t%s\n", id, str);
             free(str);
@@ -547,7 +560,7 @@ command_set(int argc, char **argv)
     bool    decode = false;
     int64_t id = -1;
 
-    while ((c = getopt_long(argc, argv, "+dh", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "+cdh", options, &idx)) != -1)
     {
         switch (c)
         {
@@ -600,6 +613,76 @@ command_set(int argc, char **argv)
     ));
 
     bool success = is_success(resp.obj);
+
+    message_clear(&resp);
+
+    return success;
+}
+
+static void
+help_get(void)
+{
+    // clang-format off
+    printf("Usage: swctl get [OPTIONS] <ID> <MIME TYPE>\n");
+    printf("\n");
+    printf("Get contents of mime type for entry\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("  -h, --help        Show this help message\n");
+    // clang-format on
+}
+
+static bool
+command_get(int argc, char **argv)
+{
+    static const struct option options[] = {
+        {"help", no_argument, 0, 'h'}, {NULL, 0, 0, 0}
+    };
+
+    int c;
+    int idx;
+
+    while ((c = getopt_long(argc, argv, "+dh", options, &idx)) != -1)
+    {
+        switch (c)
+        {
+        case 'h':
+            help_get();
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    if (!init_ipc(&ict))
+        return false;
+
+    if (argv[optind] == NULL || argv[optind + 1] == NULL)
+        return false;
+
+    int64_t id = strtol(argv[optind], NULL, 10);
+
+    struct message resp;
+
+    CHECK(roundtrip(
+        build_json_object(
+            NULL,
+            -1,
+            JSON_STR("type", IPC_REQ_GET_DATA),
+            JSON_INT("id", id),
+            JSON_STR("mime_type", argv[optind + 1]),
+            NULL
+        ),
+        &resp
+    ));
+
+    bool success = is_success(resp.obj);
+
+    // Not sure if aux_data can be NULL...
+    if (resp.aux_data != NULL)
+        fwrite(resp.aux_data, 1, resp.aux_data_len, stdout);
+    else
+        success = false;
 
     message_clear(&resp);
 
@@ -697,7 +780,7 @@ command_pin(int argc, char **argv)
 
     bool pin = true;
 
-    while ((c = getopt_long(argc, argv, "+hu", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "+uh", options, &idx)) != -1)
     {
         switch (c)
         {
@@ -871,6 +954,8 @@ main(int argc, char **argv)
         ret = command_len(sub_argc, sub_argv);
     else if (strcmp(cmd, "set") == 0)
         ret = command_set(sub_argc, sub_argv);
+    else if (strcmp(cmd, "get") == 0)
+        ret = command_get(sub_argc, sub_argv);
     else if (strcmp(cmd, "delete") == 0)
         ret = command_delete(sub_argc, sub_argv);
     else if (strcmp(cmd, "pin") == 0)

@@ -1,4 +1,4 @@
-swayclip = executable(
+swctl = executable(
   'swctl',
   'main.c',
   version_h,
