@@ -31,8 +31,7 @@ help(void)
     printf("Usage: swctl [OPTIONS] <COMMAND>\n");
     printf("\n");
     printf("Commands:\n");
-    printf("  list      List entries for use in a picker\n");
-    printf("  len       Get number of entries in history\n");
+    printf("  list      List entries in clipboard history\n");
     printf("  get       Get information of entry\n");
     printf("  set       Set current entry\n");
     printf("  delete    Delete entry\n");
@@ -244,18 +243,25 @@ text_escape(const char *str, size_t len)
 static void
 help_list(void)
 {
+    // clang-format off
     printf("Usage: swctl list [OPTIONS]\n");
     printf("\n");
+    printf("List up to \"--number\" entries starting at \"--start\",\n"
+            "in format for use by pickers, or as a JSON array.\n");
+    printf("\n");
     printf("Options:\n");
-    printf("  -s, --start       Position to start at\n");
-    printf("  -n, --number      Number of entries to list\n");
+    printf("  -j, --json        Output JSON\n");
+    printf("  -s, --start       Position to start at (default=0)\n");
+    printf("  -n, --number      Number of entries to list (default=INT64_MAX)\n");
     printf("  -h, --help        Show this help message\n");
+    // clang-format on
 }
 
 static bool
 command_list(int argc, char **argv)
 {
     static const struct option options[] = {
+        {"json", no_argument, 0, 'j'},
         {"start", required_argument, 0, 's'},
         {"number", required_argument, 0, 'n'},
         {"help", required_argument, 0, 'h'},
@@ -265,13 +271,17 @@ command_list(int argc, char **argv)
     int c;
     int idx;
 
+    bool    json = false;
     int64_t start = 0;
     int64_t number = INT64_MAX;
 
-    while ((c = getopt_long(argc, argv, "s:n:h", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "js:n:h", options, &idx)) != -1)
     {
         switch (c)
         {
+        case 'j':
+            json = true;
+            break;
         case 's':
             start = strtoll(optarg, NULL, 10);
             break;
@@ -304,6 +314,12 @@ command_list(int argc, char **argv)
     ));
 
     CHECK(json_object_is_type(resp.obj, json_type_array));
+
+    if (json)
+    {
+        printf("%s\n", json_object_to_json_string(resp.obj));
+        goto exit;
+    }
 
     for (size_t i = 0; i < json_object_array_length(resp.obj); i++)
     {
@@ -378,6 +394,67 @@ command_list(int argc, char **argv)
         message_clear(&data_resp);
     }
 
+exit:
+    message_clear(&resp);
+
+    return true;
+}
+
+static void
+help_len(void)
+{
+    // clang-format off
+    printf("Usage: swctl len [OPTIONS]\n");
+    printf("\n");
+    printf("Output number of entries in clipboard history.\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("  -h, --help        Show this help message\n");
+    // clang-format on
+}
+
+static bool
+command_len(int argc, char **argv)
+{
+    static const struct option options[] = {
+        {"help", required_argument, 0, 'h'}, {NULL, 0, 0, 0}
+    };
+
+    int c;
+    int idx;
+
+    while ((c = getopt_long(argc, argv, "s:n:h", options, &idx)) != -1)
+    {
+        switch (c)
+        {
+        case 'h':
+            help_len();
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    if (!init_ipc(&ict))
+        return false;
+
+    struct message resp;
+
+    CHECK(roundtrip(
+        build_json_object(
+            NULL, -1, JSON_STR("type", IPC_REQ_GET_HISTORY_LENGTH), NULL
+        ),
+        &resp
+    ));
+
+    CHECK(json_object_is_type(resp.obj, json_type_object));
+
+    int64_t size;
+
+    CHECK(extract_json_object(resp.obj, JSON_INT("size", &size), NULL));
+
+    printf("%" PRId64 "\n", size);
+
     message_clear(&resp);
 
     return true;
@@ -427,9 +504,9 @@ main(int argc, char **argv)
     optind = 1;
 
     if (strcmp(cmd, "list") == 0)
-    {
         ret = command_list(sub_argc, sub_argv);
-    }
+    else if (strcmp(cmd, "len") == 0)
+        ret = command_len(sub_argc, sub_argv);
     else
     {
         log_error("Unknown subcommand \"%s\"", cmd);
