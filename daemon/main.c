@@ -321,13 +321,13 @@ exit:
 
     if (ret)
     {
-        // Save content type and mime type for that content type
         if (moved)
         {
             ipc_event_entry_move(&state->ipc, id, old_pos);
         }
         else
         {
+            // Save content type and mime type for that content type
             assert(content_mime != NULL);
             (void)database_save_attribute(
                 &state->db,

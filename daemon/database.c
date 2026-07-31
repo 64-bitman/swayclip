@@ -96,7 +96,7 @@ static const struct stmt_def stmt_defs[] = {
         // Return the position of the matching entry
         entry_hash_pos,
         "SELECT Id, (SELECT COUNT(1) FROM Entries AS e2 WHERE e2.Sort_index > "
-        "e.Sort_index) - 1 As Position FROM Entries AS e WHERE e.Hash IS NOT "
+        "e.Sort_index) AS Position FROM Entries AS e WHERE e.Hash IS NOT "
         "NULL AND e.Hash = ?;"
     ),
     STMT(
