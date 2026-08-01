@@ -67,6 +67,7 @@ display_callback(int fd UNUSED, int events, void *udata)
             log_errerror("Error dispatching Wayland events");
             goto exit;
         }
+        wct->n_dispatched += n;
     }
     else if (events & (EPOLLHUP | EPOLLERR))
         goto exit;
@@ -171,49 +172,5 @@ wayland_ct_flush(struct wayland_ct *wct)
         }
         break;
     }
-    return true;
-}
-
-/*
- * Do a blocking dispatch for any Wayland events until "n" events have been
- * received or quit after "timeout" milliseconds. Only used for testing (see
- * "dispatch" IPC request).
- */
-bool
-wayland_ct_dispatch(struct wayland_ct *wct, int n, int timeout)
-{
-    // If we are preparing for a read, must cancel now to prevent a deadlock.
-    wl_display_cancel_read(wct->display);
-    wct->read_prepared = false;
-
-    struct pollfd pfd = {.fd = wct->fd, .events = POLLIN};
-    int           acc = 0;
-
-    while (acc < n)
-    {
-        int ret = poll(&pfd, 1, timeout);
-
-        if (ret == -1)
-        {
-            if (errno == EINTR)
-                continue;
-            log_errerror("Error polling Wayland display");
-            return false;
-        }
-        else if (ret == 0)
-            return false;
-
-        ret = wl_display_dispatch(wct->display);
-
-        if (ret == -1)
-        {
-            log_errerror("Error dispatching Wayland events");
-            return false;
-        }
-        acc += ret;
-    }
-
-    // Don't need to prepare for a read, since the prepare callback will be
-    // called before polling.
     return true;
 }

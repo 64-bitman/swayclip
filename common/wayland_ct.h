@@ -32,11 +32,13 @@ struct wayland_ct
 
     struct eventloop *loop;
     bool              read_prepared;
+
+    // Accumulator for number of events dispatched
+    int n_dispatched;
 };
 
 // clang-format off
 bool wayland_ct_init(struct wayland_ct *wct, struct eventloop *loop);
 void wayland_ct_uninit(struct wayland_ct *wct);
 bool wayland_ct_flush(struct wayland_ct *wct);
-bool wayland_ct_dispatch(struct wayland_ct *wct, int n, int timeout);
 // clang-format on

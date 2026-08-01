@@ -590,6 +590,7 @@ request_callback(
                 ipc_client_send_error(client, "Unknown event \"%s\"", event);
                 return;
             }
+            log_debug("Subscribing to event \"%s\"", event);
         }
 
         ipc_client_set_events(client, events);
@@ -785,24 +786,6 @@ request_callback(
             ipc_client_send_error(client, IPC_DB_ERROR);
         else
             ipc_client_send_success(client);
-    }
-    else if (strcmp(type, IPC_REQ_SYNC) == 0)
-    {
-        // Block the IPC response until at least "n" Wayland events have been
-        // dispatched. Only used for testing.
-        int64_t n;
-
-        if (!extract_json_object(req->payload, JSON_INT("n", &n), NULL) ||
-            n <= 0 || n > INT_MAX)
-        {
-            ipc_client_send_error(client, IPC_INVALID_ARGS);
-            return;
-        }
-
-        if (wayland_ct_dispatch(&state->wayland.wct, (int)n, 1000))
-            ipc_client_send_success(client);
-        else
-            ipc_client_send_error(client, "Error dispatching events");
     }
     else
         ipc_client_send_error(client, IPC_INVALID_ARGS);
