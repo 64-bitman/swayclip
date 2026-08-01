@@ -165,6 +165,7 @@ config_init(struct config *config, const char *file)
         CONFIG_BOOLEAN("daemon.regular", &config->regular),
         CONFIG_BOOLEAN("daemon.primary", &config->primary),
         CONFIG_TABLE("daemon.seats", config, extract_configured_seats),
+        CONFIG_STRING_CUSTOM("daemon.dedup", &config->dedup, extract_dedup),
         CONFIG_ARRAY(
             "daemon.mime_types.allowed",
             &config->allowed_mime_types,
@@ -174,8 +175,7 @@ config_init(struct config *config, const char *file)
             "daemon.mime_types.blocked",
             &config->blocked_mime_types,
             extract_pattern_array
-        ),
-        CONFIG_STRING_CUSTOM("daemon.dedup", &config->dedup, extract_dedup)
+        )
     };
 
     bool ret = config_extract(result.toptab, opts, N_ELEMENTS(opts));
