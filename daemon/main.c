@@ -259,7 +259,7 @@ wsignal_selection(
     {
     case DEDUP_NONE:
         // Add entry normally
-        ret = true;
+        ret = database_set_entry_hash(&state->db, -1, entry_hash);
         break;
     case DEDUP_PREV:
     {

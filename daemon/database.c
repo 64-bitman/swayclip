@@ -850,7 +850,7 @@ database_set_entry_hash(
     {
         sqlite3_bind_null(stmt, 1);
         sqlite3_bind_null(stmt, 2);
-        sqlite3_bind_blob(stmt, 1, hash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
+        sqlite3_bind_blob(stmt, 3, hash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
     }
     else
     {
