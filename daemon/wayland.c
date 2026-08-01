@@ -251,6 +251,7 @@ data_device_event_data_offer(
     struct seat *seat = udata;
 
     seat_clear_mime_types(seat);
+    seat->blocked = false;
 
     ext_data_control_offer_v1_add_listener(
         offer_proxy, &data_offer_listener, seat
@@ -317,7 +318,10 @@ selection_event(
 
     if (sel->ext_data_source != NULL || seat->blocked)
     {
-        log_debug("Currently source client or blocked, ignoring");
+        if (seat->blocked)
+            log_debug("Selection event blocked");
+        else
+            log_debug("Currently source client, ignoring");
         // Currently source client or blocked, ignore
         if (offer != NULL)
             ext_data_control_offer_v1_destroy(offer);

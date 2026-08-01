@@ -384,7 +384,6 @@ write_callback(uint8_t *buf, size_t sz, size_t *len, void *udata)
         return false;
     }
     *off += *len;
-    ;
 
     return true;
 }
