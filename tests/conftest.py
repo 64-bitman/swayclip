@@ -330,6 +330,6 @@ def wait_cond(func: Callable, timeout: float = 1):
             func()
             break  # Success
         except:
-            if time.time() - start > 2:
+            if time.time() - start > timeout:
                 raise
             time.sleep(0.05)
