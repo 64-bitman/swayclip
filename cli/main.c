@@ -194,7 +194,7 @@ human_readable_size(size_t bytes)
 char *
 text_escape(const char *str, size_t len)
 {
-    // Worst case: every char becomes 4 chars (\xHH), plus null terminator
+    // Worst case: every char becomes 4 chars (\xHH), plus NUL terminator
     char *out = malloc(len * 4 + 1);
 
     assert(out != NULL);
