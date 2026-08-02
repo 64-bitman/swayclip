@@ -152,10 +152,11 @@ ipc_ct_read(
         bool    poll = false;
         int    *scm_ptr = need_scm ? &ict->scm_fd : NULL;
 
+        // Subtract one because a NUL terminator may possibly be required.
         r = io_recv(
             ict->fd,
             ict->buf,
-            MIN(sizeof(ict->buf), ict->pending_size),
+            MIN(sizeof(ict->buf) - 1, ict->pending_size),
             scm_ptr,
             &poll
         );
@@ -183,6 +184,13 @@ ipc_ct_read(
         }
 
         ict->pending_size -= r;
+
+        if (ict->pending_size == 0)
+        {
+            // NUL terminate the string
+            ict->buf[r] = NUL;
+            r++; // Include NUL in length
+        }
 
         enum json_tokener_error j_err;
         struct json_object     *msg =
