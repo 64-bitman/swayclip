@@ -328,9 +328,9 @@ ipc_ct_write_msg(
 
     // Should never fail
     assert(type <= UINT8_MAX);
-    assert(xarray_add_write(&buf, type));
-    assert(xarray_concat_write(&buf, (uint8_t *)&l, sizeof(l)));
-    assert(xarray_concat_write(&buf, (uint8_t *)str, len));
+    xarray_add_write(&buf, type);
+    xarray_concat_write(&buf, (uint8_t *)&l, sizeof(l));
+    xarray_concat_write(&buf, (uint8_t *)str, len);
 
     struct ipc_write wr;
 
