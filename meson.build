@@ -40,9 +40,9 @@ if scdoc_dep.found()
 	scdoc_prog = find_program(scdoc_dep.get_variable(pkgconfig: 'scdoc'), native: true)
     mandir = get_option('mandir')
     man_files = [
-      'doc/swayclip.1.scd',
-      'doc/swayclip.5.scd',
-      'doc/swctl.1.scd'
+      'docs/swayclip.1.scd',
+      'docs/swayclip.5.scd',
+      'docs/swctl.1.scd'
     ]
 
     foreach filename : man_files
