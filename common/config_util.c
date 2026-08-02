@@ -99,7 +99,12 @@ config_extract(toml_datum_t table, const struct config_option *opts, int n_opts)
         toml_type_t  type = dat.type;
 
         if (type == TOML_UNKNOWN)
+        {
+            log_debug(
+                "Did not find config option \"%s\" in config file", opt->key
+            );
             continue;
+        }
 
         if (type != opt->type)
         {

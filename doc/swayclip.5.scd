@@ -11,6 +11,10 @@ you can paste them again later. When it starts up, it reads a settings file
 written in the TOML format. To find out where this file should go, see
 *swayclip*(1).
 
+If you believe you may have mispelled a config option, try enabling debug
+messages for the swayclip daemon. It will output config options that are not
+found in the config file.
+
 # TERMINOLOGY
 
 A few words you'll see used in a specific way in this document:
