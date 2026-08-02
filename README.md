@@ -121,6 +121,12 @@ use KDE...
 
 </details>
 
+# Mentions
+
+- [tomlc17](https://github.com/cktan/tomlc17) - Used to parse config file
+- [crypto-algorithms](https://github.com/B-Con/crypto-algorithms) - For SHA256
+implementation
+
 # License
 
 [GPLv3 License](LICENSE)
