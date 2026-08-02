@@ -385,12 +385,14 @@ command_list(int argc, char **argv)
         CHECK(json_object_is_type(entry, json_type_object));
 
         int64_t     id;
+        bool        pinned;
         const char *content_type;
         const char *mime_type;
 
         CHECK(extract_json_object(
             entry,
             JSON_INT("id", &id),
+            JSON_BOOL("pinned", &pinned),
             JSON_STR("content_type", &content_type),
             JSON_STR("content_mime_type", &mime_type),
             NULL
@@ -410,11 +412,17 @@ command_list(int argc, char **argv)
             &data_resp
         ));
 
+        const char *aux = "";
+
+        if (pinned)
+            aux = "PINNED    ";
+
         if (strcmp(content_type, "binary") == 0)
         {
             printf(
-                "%" PRId64 "\t[[ binary data %s %s ]]\n",
+                "%" PRId64 "\t%s[[ binary data %s %s ]]\n",
                 id,
+                aux,
                 mime_type,
                 human_readable_size(data_resp.aux_data_len)
             );
@@ -438,14 +446,15 @@ command_list(int argc, char **argv)
             char *str =
                 text_escape(stuff, MIN((size_t)100, data_resp.aux_data_len));
 
-            printf("%" PRId64 "\t%s\n", id, str);
+            printf("%" PRId64 "\t%s%s\n", id, aux, str);
             free(str);
         }
         else if (strcmp(content_type, "image") == 0)
         {
             printf(
-                "%" PRId64 "\t[[ image data %s %s ]]\n",
+                "%" PRId64 "\t%s[[ image data %s %s ]]\n",
                 id,
+                aux,
                 mime_type,
                 human_readable_size(data_resp.aux_data_len)
             );
