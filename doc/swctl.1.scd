@@ -1,12 +1,12 @@
-swayclip(1)
+swctl(1)
 
 # NAME
 
-swayclip - Control the swayclip daemon
+swctl - Control and query the swayclip daemon
 
 # SYNOPSIS
 
-*swayclip* [OPTIONS]
+*swctl* [OPTIONS] [COMMAND]
 
 # OPTIONS
 
