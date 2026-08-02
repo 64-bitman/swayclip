@@ -33,6 +33,9 @@ man 5 swayclip
 man 1 swctl
 ```
 
+Note that your Wayland compositor must support the `ext-data-control-v1`
+protocol.
+
 # Quick start
 
 ## Example Config
