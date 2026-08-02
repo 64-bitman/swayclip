@@ -1,12 +1,14 @@
 prog_python = find_program('python3')
 
-db_schema = custom_target(
-  'db_schema.h',
-  output: 'db_schema.h',
-  input: 'db_schema.sql',
-  command: [prog_python, meson.current_source_dir() + '/db_schema_gen.py']
+if prog_python.found()
+  db_schema = custom_target(
+    'db_schema.h',
+    output: 'db_schema.h',
+    input: 'db_schema.sql',
+    command: [prog_python, meson.current_source_dir() + '/db_schema_gen.py']
 
-)
+  )
+endif
 
 swayclip = executable(
   'swayclip',
