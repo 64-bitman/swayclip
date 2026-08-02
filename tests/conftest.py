@@ -62,7 +62,7 @@ class Compositor():
                 })
         assert self._read_msg() == "OK"
 
-    def paste(self, seat: str, sel: Selection) -> dict[str, str] | None:
+    def pastex(self, seat: str, sel: Selection) -> dict[str, str] | None:
         """Paste current clipboard contents, or None if clipboard is cleared"""
         self._write_msg({
             'cmd': 'get',
@@ -73,6 +73,13 @@ class Compositor():
         ret: dict[str, str] | None = self._read_msg()
 
         return ret
+    
+    def expect(self, seat: str, sel: Selection, \
+               expect: dict[str, str] | None) -> None:
+        """Expect clipboard contents to be "expected" """
+        def func():
+            assert self.pastex(seat, sel) == expect
+        wait_cond(func)
 
     def close(self):
         self.proc.terminate()
@@ -141,7 +148,7 @@ class Daemon():
     ipc_path: pathlib.Path
 
     # Current events to listen for
-    events: list[str] = []
+    events: list[str]
 
     def __init__(self, display: str, config: str, dir: pathlib.Path):
         path: str | None = os.getenv("TEST_DAEMON")
@@ -170,11 +177,11 @@ class Daemon():
 
         # Wait for initial ready message
         assert self.proc.stdout is not None
-
         assert self.proc.stdout.readline() == "Ready\n"
 
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.connect(str(self.ipc_path))
+        self.events = []
 
     def _subscribe(self):
         assert self.roundtrip(
@@ -274,6 +281,7 @@ class Daemon():
         """Receive an event and remove it from the events list"""
         msg = self.recv_msg()
         self.remove_events([event])
+        assert 'event' in msg.msg
         assert msg.msg['event'] == event
         return msg
 
@@ -305,8 +313,8 @@ def cmp_entry(
         id: int,
         mime_types: list[str],
         pinned: bool,
-        content_type: str,
-        content_mime: str) -> None:
+        content_type: str | None,
+        content_mime: str | None) -> None:
     """
     Assert if "entry" has the given values, ignoring creation time and update
     time
@@ -314,8 +322,10 @@ def cmp_entry(
     assert entry['id'] == id
     assert Counter(entry['mime_types']) == Counter(mime_types)
     assert entry['pinned'] == pinned
-    assert entry['content_type'] == content_type
-    assert entry['content_mime_type'] == content_mime
+    if content_type is not None:
+        assert entry['content_type'] == content_type
+    if content_mime is not None:
+        assert entry['content_mime_type'] == content_mime
 
 def wait_cond(func: Callable, timeout: float = 1):
     start = time.time()

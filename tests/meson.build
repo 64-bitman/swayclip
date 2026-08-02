@@ -21,14 +21,15 @@ testserver = executable(
   dependencies: [server_dep, wlr_dep, json_dep, xstructs_dep]
 )
 
-tests = ['clipboard']
+tests = ['clipboard', 'database']
 
 foreach test : tests
   test(
     test,
     pytest,
-    args: ['-m', 'pytest', meson.current_source_dir(), '-v'],
+    args: ['-m', 'pytest', '-v', meson.current_source_dir() + '/test_' + test + '.py'],
     workdir: meson.current_source_dir(),
+    depends: [swayclip, testserver],
     env: {
       'TEST_DAEMON': swayclip.full_path(),
       'TEST_SERVER': testserver.full_path()
