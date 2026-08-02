@@ -22,6 +22,9 @@ def test_set_clipboard(compositor: Compositor, daemon_runner: Callable):
     msg = daemon.roundtrip({"type": "get_entries", "start": 5, "n": 1})
     update_time = msg.msg[0]["update_time"]
 
+    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    assert msg.msg[0]["current"] == True
+
     daemon.add_events(["entry_state"])
     msg = daemon.roundtrip({"type": "set_clipboard", "id": 5})
     # Previous set entry should have "entry_state" event too. Its sent before
@@ -34,6 +37,11 @@ def test_set_clipboard(compositor: Compositor, daemon_runner: Callable):
     msg = daemon.recv_msg()
     assert msg.msg == {"type": "success"}
     compositor.expect("test", Selection.REGULAR, {"a": "5"})
+
+    msg = daemon.roundtrip({"type": "get_entries", "start": 5, "n": 1})
+    assert msg.msg[0]["current"] == True
+    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    assert msg.msg[0]["current"] == False
 
     msg = daemon.roundtrip({"type": "get_entries", "start": 5, "n": 1})
     assert update_time < msg.msg[0]["update_time"]

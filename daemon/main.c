@@ -481,7 +481,8 @@ get_entry_callback(
 )
 {
     struct json_object *arr = ((void **)udata)[0];
-    struct database    *db = ((void **)udata)[1];
+    struct state       *state = ((void **)udata)[1];
+    struct database    *db = &state->db;
     struct json_object *mime_types = json_object_new_array();
     struct json_object *obj = json_object_new_object();
 
@@ -507,6 +508,7 @@ get_entry_callback(
         JSON_INT("creation_time", creation_time),
         JSON_INT("update_time", update_time),
         JSON_BOOL("pinned", pinned),
+        JSON_BOOL("current", state->id == id),
         JSON_OBJ("mime_types", mime_types),
         NULL
     );
@@ -631,7 +633,7 @@ request_callback(
             return;
         }
 
-        const void *udata[] = {arr, &state->db};
+        const void *udata[] = {arr, state};
 
         if (!database_get_entries(
                 &state->db, start, n, get_entry_callback, udata

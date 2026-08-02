@@ -397,6 +397,7 @@ command_list(int argc, char **argv)
 
         int64_t     id;
         bool        pinned;
+        bool        current;
         const char *content_type;
         const char *mime_type;
 
@@ -404,6 +405,7 @@ command_list(int argc, char **argv)
             entry,
             JSON_INT("id", &id),
             JSON_BOOL("pinned", &pinned),
+            JSON_BOOL("current", &current),
             JSON_STR("content_type", &content_type),
             JSON_STR("content_mime_type", &mime_type),
             NULL
@@ -423,10 +425,15 @@ command_list(int argc, char **argv)
             &data_resp
         ));
 
-        const char *aux = "";
+        static char aux[128];
 
-        if (pinned)
-            aux = "PINNED    ";
+        snprintf(
+            aux,
+            sizeof(aux),
+            "    %s%s",
+            current ? "[CURRENT] " : "",
+            pinned ? "[PINNED] " : ""
+        );
 
         if (strcmp(content_type, "binary") == 0)
         {
