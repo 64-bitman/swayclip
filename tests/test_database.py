@@ -22,13 +22,13 @@ def test_set_clipboard(compositor: Compositor, daemon_runner: Callable):
     msg = daemon.roundtrip({'type': 'get_entries', 'start': 5, 'n': 1})
     update_time = msg.msg[0]['update_time']
 
-    daemon.add_events(["clipboard_state"])
+    daemon.add_events(["entry_state"])
     msg = daemon.roundtrip({'type': 'set_clipboard', 'id': 5})
-    # Previous set entry should have clipboard_state event too. Its sent before
+    # Previous set entry should have "entry_state" event too. Its sent before
     # the success response, confusing but oh well.
     assert msg.msg['id'] == 10
     assert msg.msg['state'] == False
-    pmsg = daemon.recv_event("clipboard_state")
+    pmsg = daemon.recv_event("entry_state")
     assert pmsg.msg['id'] == 5
     assert pmsg.msg['state'] == True
     msg = daemon.recv_msg()

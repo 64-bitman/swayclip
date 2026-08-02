@@ -38,8 +38,8 @@
 #define IPC_EVENT_FLAG_ENTRY_UPDATE 4
 #define IPC_EVENT_ENTRY_MOVE "entry_move"
 #define IPC_EVENT_FLAG_ENTRY_MOVE 8
-#define IPC_EVENT_CLIPBOARD_STATE "clipboard_state"
-#define IPC_EVENT_FLAG_CLIPBOARD_STATE 16
+#define IPC_EVENT_ENTRY_STATE "entry_state"
+#define IPC_EVENT_FLAG_ENTRY_STATE 16
 
 enum ipc_message_type
 {

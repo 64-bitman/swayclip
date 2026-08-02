@@ -409,22 +409,21 @@ ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos)
 }
 
 /*
- * Emit event when clipboard state is changed (when currently set entry
- * changes).
+ * Emit event when entry is set as the current entry or not.
  */
 void
-ipc_event_clipboard_state(struct ipc *ipc, int64_t entry_id, bool state)
+ipc_event_entry_state(struct ipc *ipc, int64_t entry_id, bool state)
 {
-    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_CLIPBOARD_STATE))
+    if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_STATE))
         return;
     ipc_emit_event(
         ipc,
-        IPC_EVENT_CLIPBOARD_STATE,
-        IPC_EVENT_FLAG_CLIPBOARD_STATE,
+        IPC_EVENT_ENTRY_STATE,
+        IPC_EVENT_FLAG_ENTRY_STATE,
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", IPC_EVENT_CLIPBOARD_STATE),
+            JSON_STR("event", IPC_EVENT_ENTRY_STATE),
             JSON_INT("id", entry_id),
             JSON_BOOL("state", state),
             NULL

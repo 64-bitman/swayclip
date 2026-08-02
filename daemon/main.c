@@ -118,7 +118,7 @@ static void
 set(struct state *state, struct selection *ignore, int64_t id)
 {
     if (state->id != -1)
-        ipc_event_clipboard_state(&state->ipc, state->id, false);
+        ipc_event_entry_state(&state->ipc, state->id, false);
 
     state->id = id;
     if (state->id == -1)
@@ -130,7 +130,7 @@ set(struct state *state, struct selection *ignore, int64_t id)
     wayland_set(&state->wayland, ignore);
 
     if (state->id != -1)
-        ipc_event_clipboard_state(&state->ipc, state->id, true);
+        ipc_event_entry_state(&state->ipc, state->id, true);
 }
 
 static void
@@ -584,8 +584,8 @@ request_callback(
                 events |= IPC_EVENT_FLAG_ENTRY_UPDATE;
             else if (strcmp(event, IPC_EVENT_ENTRY_MOVE) == 0)
                 events |= IPC_EVENT_FLAG_ENTRY_MOVE;
-            else if (strcmp(event, IPC_EVENT_CLIPBOARD_STATE) == 0)
-                events |= IPC_EVENT_FLAG_CLIPBOARD_STATE;
+            else if (strcmp(event, IPC_EVENT_ENTRY_STATE) == 0)
+                events |= IPC_EVENT_FLAG_ENTRY_STATE;
             else
             {
                 ipc_client_send_error(client, "Unknown event \"%s\"", event);
@@ -761,7 +761,7 @@ request_callback(
         // If deleted entry was set as the clipboard, then clear the clipboard
         if (id == state->id)
         {
-            // Don't want to send "clipboard_state" event for the now deleted
+            // Don't want to send "entry_state" event for the now deleted
             // entry.
             state->id = -1;
             set(state, NULL, -1);
@@ -807,13 +807,13 @@ help(void)
     printf("Usage: swayclip [OPTIONS]\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -l, --logfile <path>      File to write log messages to\n");
-    printf("  -c, --config <path>       File to parse config\n");
-    printf("  -r, --ready               Print \"Ready\" when fully initialized\n");
-    printf("  -s, --db <path>           File to place SQLite database\n");
-    printf("  -d, --debug               Enable debug log messages\n");
-    printf("  -h, --help                Show this help message\n");
-    printf("  -v, --version             Show version\n");
+    printf("  -l, --logfile <PATH>      File to write log messages to.\n");
+    printf("  -c, --config <PATH>       File to parse config.\n");
+    printf("  -s, --db <PATH>           File to place SQLite database.\n");
+    printf("  -r, --ready               Print \"Ready\" when fully initialized.\n");
+    printf("  -d, --debug               Enable debug log messages.\n");
+    printf("  -h, --help                Show this help message.\n");
+    printf("  -v, --version             Show version.\n");
     // clang-format on
 }
 
