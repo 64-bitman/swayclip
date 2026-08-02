@@ -265,8 +265,17 @@ is_success(struct json_object *resp)
     struct json_object *j_success;
 
     json_object_object_get_ex(resp, "type", &j_success);
-    if (!json_object_is_type(j_success, json_type_string))
+    CHECK(json_object_is_type(j_success, json_type_string));
+
+    if (strcmp(json_object_get_string(j_success), "error") == 0)
+    {
+        const char *desc;
+
+        CHECK(extract_json_object(resp, JSON_STR("desc", &desc), NULL));
+        log_error("IPC error: %s", desc);
+
         return false;
+    }
     return strcmp(json_object_get_string(j_success), "success") == 0;
 }
 
