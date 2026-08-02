@@ -102,14 +102,19 @@ In both cases, this means that when you copy to the clipboard, the clipboard
 manager immediately takes ownership of the clipboard. This may strip certain
 useful mime types from the clipboard that the original source client had.
 
-In Wayland, the compositor does not store the contents of the clipboard
-directly. Instead the source client does, which is the Wayland client that
-currently "owns" the clipboard. When another client requests some data from the
-clipboard, the source clients sends the data. 
+As said in swayclip(1):
+```
+In Wayland, whatever app you copied something from is the one actually holding
+onto that clipboard content, the compositor itself doesn't store it. This means
+if you close that app, whatever you copied disappears too. swayclip fixes this
+by keeping its own copy of your clipboard history, and only steps in to "hold"
+the clipboard once the original app closes or exits.
+```
+Meaning "owning" the clipboard means that the client is the source of the
+clipboard data.
 
-Swayclip avoids this by instead only taking ownership of the clipboard when it
-is cleared (either manually or when the source client exits). This is what KDE
-Klipper does I believe, according to my memory when I used to use KDE...
+This is what KDE Klipper does I believe, according to my memory when I used to
+use KDE...
 
 </details>
 
