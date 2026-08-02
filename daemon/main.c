@@ -815,6 +815,10 @@ request_callback(
         else
             ipc_client_send_error(client, IPC_DB_ERROR);
     }
+    else if (strcmp(type, IPC_REQ_GET_CURRENT) == 0)
+    {
+        ipc_client_send(client, json_object_new_int64(state->id), -1);
+    }
     else
         ipc_client_send_error(client, IPC_INVALID_ARGS);
 }

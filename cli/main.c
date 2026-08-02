@@ -40,6 +40,7 @@ help(void)
     printf("  get       Get contents of entry.\n");
     printf("  delete    Delete entry.\n");
     printf("  pin       Pin an entry.\n");
+    printf("  current   Get of ID of entry clipboard is set to.\n");
     printf("  events    Listen for events.\n");
     printf("\n");
     printf("Options:\n");
@@ -867,6 +868,62 @@ command_pin(int argc, char **argv)
 }
 
 static void
+help_current(void)
+{
+    // clang-format off
+    printf("Usage: swctl current [OPTIONS]\n");
+    printf("\n");
+    printf("Output of ID of entry clipboard is set to, or -1 if clipboard is cleared.\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("  -h, --help        Show this help message.\n");
+    // clang-format on
+}
+
+static bool
+command_current(int argc, char **argv)
+{
+    static const struct option options[] = {
+        {"help", no_argument, 0, 'h'}, {NULL, 0, 0, 0}
+    };
+
+    int c;
+    int idx;
+
+    while ((c = getopt_long(argc, argv, "h", options, &idx)) != -1)
+    {
+        switch (c)
+        {
+        case 'h':
+            help_current();
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    if (!init_ipc(&ict))
+        return false;
+
+    struct message resp;
+
+    CHECK(roundtrip(
+        build_json_object(
+            NULL, -1, JSON_STR("type", IPC_REQ_GET_CURRENT), NULL
+        ),
+        &resp
+    ));
+
+    CHECK(json_object_is_type(resp.obj, json_type_int));
+
+    printf("%" PRId64 "\n", json_object_get_int64(resp.obj));
+
+    message_clear(&resp);
+
+    return true;
+}
+
+static void
 help_events(void)
 {
     // clang-format off
@@ -1002,6 +1059,8 @@ main(int argc, char **argv)
         ret = command_delete(sub_argc, sub_argv);
     else if (strcmp(cmd, "pin") == 0)
         ret = command_pin(sub_argc, sub_argv);
+    else if (strcmp(cmd, "current") == 0)
+        ret = command_current(sub_argc, sub_argv);
     else if (strcmp(cmd, "events") == 0)
         ret = command_events(sub_argc, sub_argv);
     else

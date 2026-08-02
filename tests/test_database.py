@@ -25,6 +25,8 @@ def test_set_clipboard(compositor: Compositor, daemon_runner: Callable):
     msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     assert msg.msg[0]["current"] == True
 
+    assert daemon.roundtrip({"type": "get_current"}).msg == 10
+
     daemon.add_events(["entry_state"])
     msg = daemon.roundtrip({"type": "set_clipboard", "id": 5})
     # Previous set entry should have "entry_state" event too. Its sent before

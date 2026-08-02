@@ -59,6 +59,10 @@ All commands have a "--help" option, which provides a quick summary.
 	clipboard history. If "--unpin" is provided, then unpin the entry. If
 	"--toggle" is provided, then toggle the pinned status of the entry.
 
+*current*
+	Output ID of entry that clipboard is set to. If the clipboard is cleared,
+	then -1 is outputted.
+
 *events <events>*
 	Output a JSON stream of events from the daemon. "events" is a list of events
 	to listen for. Each event is a JSON object that contains fields. A field
