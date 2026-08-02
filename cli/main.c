@@ -370,7 +370,7 @@ command_list(int argc, char **argv)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("type", IPC_REQ_GET_ENTRIES),
+            JSON_STR("type", IPC_REQ_GET_HISTORY),
             JSON_INT("start", start),
             JSON_INT("n", number),
             NULL

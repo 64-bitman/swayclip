@@ -17,7 +17,7 @@ def test_receive(compositor: Compositor, daemon_runner: Callable):
     compositor.copy("test", Selection.REGULAR, {"text/plain": "hi", "a": "b"})
     daemon.recv_event("entry_add")
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     cmp_entry(msg.msg[0], 1, ["text/plain", "a"], False, "text", "text/plain")
 
     msg = daemon.roundtrip({"type": "get_data", "id": 1, "mime_type": "text/plain"})
@@ -86,7 +86,7 @@ def test_receive_existing(compositor: Compositor, daemon_runner: Callable):
     # Wayland events may be received after daemon request is sent and processed,
     # so must check multiple times.
     def func():
-        msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+        msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
         cmp_entry(msg.msg[0], 1, ["text/plain"], False, "text", "text/plain")
 
     wait_cond(func)
@@ -188,7 +188,7 @@ def test_allowed_mime_types(compositor: Compositor, daemon_runner: Callable):
     )
     daemon.recv_event("entry_add")
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
 
     cmp_entry(msg.msg[0], 1, ["allowed1", "allowed2"], False, None, None)
 
@@ -243,21 +243,21 @@ def test_content_type(compositor: Compositor, daemon_runner: Callable):
     compositor.copy("test", Selection.REGULAR, {"text/html": "html"})
     daemon.recv_event("entry_add")
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     cmp_entry(msg.msg[0], 1, ["text/html"], False, "text", "text/html")
 
     daemon.add_events(["entry_add"])
     compositor.copy("test", Selection.REGULAR, {"image/png": "image"})
     daemon.recv_event("entry_add")
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     cmp_entry(msg.msg[0], 2, ["image/png"], False, "image", "image/png")
 
     daemon.add_events(["entry_add"])
     compositor.copy("test", Selection.REGULAR, {"stuff": "x"})
     daemon.recv_event("entry_add")
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     cmp_entry(msg.msg[0], 3, ["stuff"], False, "binary", "stuff")
 
 

@@ -612,7 +612,7 @@ request_callback(
                 -1
             );
     }
-    else if (strcmp(type, IPC_REQ_GET_ENTRIES) == 0)
+    else if (strcmp(type, IPC_REQ_GET_HISTORY) == 0)
     {
         int64_t start;
         int64_t n;

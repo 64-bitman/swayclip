@@ -19,10 +19,10 @@ def test_set_clipboard(compositor: Compositor, daemon_runner: Callable):
         daemon.recv_event("entry_add")
 
     # "update_time" should be updated
-    msg = daemon.roundtrip({"type": "get_entries", "start": 5, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 5, "n": 1})
     update_time = msg.msg[0]["update_time"]
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     assert msg.msg[0]["current"] == True
 
     daemon.add_events(["entry_state"])
@@ -38,12 +38,12 @@ def test_set_clipboard(compositor: Compositor, daemon_runner: Callable):
     assert msg.msg == {"type": "success"}
     compositor.expect("test", Selection.REGULAR, {"a": "5"})
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 5, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 5, "n": 1})
     assert msg.msg[0]["current"] == True
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     assert msg.msg[0]["current"] == False
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 5, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 5, "n": 1})
     assert update_time < msg.msg[0]["update_time"]
 
     msg = daemon.roundtrip({"type": "set_clipboard", "id": 10})
@@ -141,7 +141,7 @@ def test_move(compositor: Compositor, daemon_runner: Callable):
     daemon.recv_event("entry_add")
 
     # "update_time" should be updated
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     update_time = msg.msg[0]["update_time"]
 
     daemon.add_events(["entry_add"])
@@ -154,7 +154,7 @@ def test_move(compositor: Compositor, daemon_runner: Callable):
     assert daemon.recv_msg().msg["event"] == "entry_move"
     daemon.remove_events(["entry_move", "entry_update"])
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     assert update_time < msg.msg[0]["update_time"]
 
     msg = daemon.roundtrip({"type": "get_history_length"})
@@ -199,7 +199,7 @@ def test_trim(compositor: Compositor, daemon_runner: Callable):
 
     assert daemon.roundtrip({"type": "get_history_length"}).msg == {"size": 3}
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 3})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 3})
     cmp_entry(msg.msg[2], 1, ["a"], True, None, None)
     cmp_entry(msg.msg[1], 2, ["x"], False, None, None)
     cmp_entry(msg.msg[0], 3, ["f"], False, None, None)
@@ -208,7 +208,7 @@ def test_trim(compositor: Compositor, daemon_runner: Callable):
     compositor.copy("test", Selection.REGULAR, {"m": "n"})
     daemon.recv_event("entry_add")
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 3})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 3})
     cmp_entry(msg.msg[2], 1, ["a"], True, None, None)
     cmp_entry(msg.msg[1], 3, ["f"], False, None, None)
     cmp_entry(msg.msg[0], 4, ["m"], False, None, None)
@@ -245,12 +245,12 @@ def test_pin_toggle(compositor: Compositor, daemon_runner: Callable):
         "type": "success"
     }
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     assert msg.msg[0]["pinned"] == True
 
     assert daemon.roundtrip({"type": "pin_entry", "id": 1, "pin": "toggle"}).msg == {
         "type": "success"
     }
 
-    msg = daemon.roundtrip({"type": "get_entries", "start": 0, "n": 1})
+    msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     assert msg.msg[0]["pinned"] == False
