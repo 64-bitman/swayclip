@@ -85,6 +85,14 @@ These options go under a section called *"daemon"* in the settings file.
 		history, don't create a new entry, instead just move that older matching
 		entry back up to the top of the list.
 
+*logfile = <path string>*
+	Path to file to log messages to. Note that the "--logfile" command argument
+	takes precedence.
+
+*db = <path string>*
+	Path to file to store database at. Note that the "--db" command argument
+	takes precedence.
+
 These options go under a *"mime_types"* section, which itself lives inside the
 *"daemon"* section. They let you control which kinds of content get saved.
 

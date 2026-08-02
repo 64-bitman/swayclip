@@ -152,7 +152,9 @@ config_init(struct config *config, const char *file)
         .regular = true,
         .primary = true,
         .set_on_startup = true,
-        .dedup = DEDUP_ALL
+        .dedup = DEDUP_ALL,
+        .logfile = NULL,
+        .db = NULL
     };
 
     xarray_init_config_seat(&config->configured_seats);
@@ -167,6 +169,8 @@ config_init(struct config *config, const char *file)
         CONFIG_BOOLEAN("daemon.primary", &config->primary),
         CONFIG_BOOLEAN("daemon.set_on_startup", &config->set_on_startup),
         CONFIG_STRING_CUSTOM("daemon.dedup", &config->dedup, extract_dedup),
+        CONFIG_STRING("daemon.logfile", &config->logfile),
+        CONFIG_STRING("daemon.db", &config->db),
         CONFIG_TABLE("daemon.seats", config, extract_configured_seats),
         CONFIG_ARRAY(
             "daemon.mime_types.allowed",
@@ -209,4 +213,7 @@ config_uninit(struct config *config)
 
     xarray_foreach(regex, &config->blocked_mime_types, reg) regfree(reg);
     xarray_uninit_regex(&config->blocked_mime_types);
+
+    free(config->logfile);
+    free(config->db);
 }

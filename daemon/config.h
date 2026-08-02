@@ -58,6 +58,10 @@ struct config
 
     bool set_on_startup;
 
+    // CLI arguments take precendence
+    char *logfile;
+    char *db;
+
     // Setting for deduplication of entries.
     // "none" - don't deduplicate entries
     // "prev" - only check previous entry

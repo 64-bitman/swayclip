@@ -919,6 +919,9 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+    if (!init_log && state.config.logfile != NULL)
+        log_init(state.config.logfile);
+
     if (!eventloop_init(&state.loop))
     {
         config_uninit(&state.config);
@@ -926,6 +929,8 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+    if (db_file == NULL && state.config.db != NULL)
+        db_file = strdup(state.config.db);
     ret = database_init(&state.db, db_file, &state.config);
     free(db_file);
     if (!ret)
