@@ -26,7 +26,9 @@ All commands have a "--help" option, which provides a quick summary.
 	for pickers will be outputted, as described below:
 
 	Each line is prefixed with a number representing the ID of the entry,
-	separated by a Tab, then a preview of the contents.
+	separated by a Tab, then a preview of the contents. If the contents is an
+	image or binary, then placeholder text displaying the mime type and size of
+	the data will be shown instead.
 
 	Most pickers consider a Tab to be a column separator, which can be
 	used to only show the contents in the picker. For example with fuzzel:
