@@ -6,7 +6,7 @@ Configuration options for swayclip
 
 # DESCRIPTION
 
-Swayclip is a clipboard manager: it keeps a history of things you've copied so
+swayclip is a clipboard manager: it keeps a history of things you've copied so
 you can paste them again later. When it starts up, it reads a settings file
 written in the TOML format. To find out where this file should go, see
 *swayclip*(1).
@@ -89,9 +89,9 @@ These options go under a *"mime_types"* section, which itself lives inside the
 *"daemon"* section. They let you control which kinds of content get saved.
 
 *allowed = [array of regular expressions]*
-	A list of patterns (regular expressions) describing which content types are
-	okay to save — for example, plain text or images. If something copied
-	matches one of these patterns, swayclip will store it.
+	A list of patterns (POSIX regular expressions) describing which content
+	types are okay to save — for example, plain text or images. If something
+	copied matches one of these patterns, swayclip will store it.
 
 *blocked = [array of regular expressions]*
 	Works the same way as "allowed" above, but in reverse: if a copied item
