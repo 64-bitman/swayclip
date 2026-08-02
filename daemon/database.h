@@ -71,6 +71,8 @@ struct database
         sqlite3_stmt *entry_hash_id;
 
         sqlite3_stmt *update_sort_index;
+
+        sqlite3_stmt *get_pinned;
     } stmt;
 };
 
@@ -105,4 +107,5 @@ bool database_get_attribute(struct database *db, int64_t id, const char *key, in
 bool database_set_entry_hash(struct database *db, int64_t id, uint8_t hash[SHA256_BLOCK_SIZE]);
 int64_t database_entry_hash_pos(struct database *db, uint8_t hash[SHA256_BLOCK_SIZE], int64_t *id);
 bool database_update_sort_index(struct database *db, int64_t id);
+bool database_entry_is_pinned(struct database *db, int64_t id);
 // clang-format on

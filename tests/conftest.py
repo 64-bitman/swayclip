@@ -21,7 +21,7 @@ class Selection(StrEnum):
     PRIMARY = "primary"
 
 
-class Compositor():
+class Compositor:
     proc: sb.Popen
     display: str
 
@@ -40,45 +40,46 @@ class Compositor():
 
     def add_seat(self, name: str) -> None:
         """Add a new seat to the compositor"""
-        self._write_msg({'cmd': 'add_seat', 'name': name})
+        self._write_msg({"cmd": "add_seat", "name": name})
         assert self._read_msg() == "OK"
 
     def del_seat(self, seat: str) -> None:
         """Remove seat from compositor"""
-        self._write_msg({'cmd': 'del_seat', 'name': seat})
+        self._write_msg({"cmd": "del_seat", "name": seat})
         assert self._read_msg() == "OK"
 
-    def copy(self, seat: str, sel: Selection,
-             mime_types: dict[str, str] | None) -> None:
+    def copy(
+        self, seat: str, sel: Selection, mime_types: dict[str, str] | None
+    ) -> None:
         """Copy "mime_types" to clipboard or if None, clear the clipboard"""
         if mime_types is None:
-            self._write_msg({'cmd': 'clear', 'seat': seat, 'sel': str(sel)})
+            self._write_msg({"cmd": "clear", "seat": seat, "sel": str(sel)})
         else:
-            self._write_msg({
-                'cmd': 'set',
-                'seat': seat,
-                'sel': str(sel),
-                'mime_types': mime_types
-                })
+            self._write_msg(
+                {"cmd": "set", "seat": seat, "sel": str(sel), "mime_types": mime_types}
+            )
         assert self._read_msg() == "OK"
 
     def pastex(self, seat: str, sel: Selection) -> dict[str, str] | None:
         """Paste current clipboard contents, or None if clipboard is cleared"""
-        self._write_msg({
-            'cmd': 'get',
-            'seat': seat,
-            'sel': str(sel),
-            })
+        self._write_msg(
+            {
+                "cmd": "get",
+                "seat": seat,
+                "sel": str(sel),
+            }
+        )
 
         ret: dict[str, str] | None = self._read_msg()
 
         return ret
-    
-    def expect(self, seat: str, sel: Selection, \
-               expect: dict[str, str] | None) -> None:
+
+    def expect(self, seat: str, sel: Selection, expect: dict[str, str] | None) -> None:
         """Expect clipboard contents to be "expected" """
+
         def func():
             assert self.pastex(seat, sel) == expect
+
         wait_cond(func)
 
     def close(self):
@@ -96,15 +97,13 @@ def compositor(tmp_path_factory) -> Generator:
     assert path is not None
 
     proc: sb.Popen = sb.Popen(
-            [path, '-d', tmp_path / 'test'],
-            stdout=sb.PIPE,
-            stdin=sb.PIPE,
-            text=True,
-            bufsize=1,
-            env={
-                **os.environ,
-                'XDG_RUNTIME_DIR': str(tmp_path)
-                })
+        [path, "-d", tmp_path / "test"],
+        stdout=sb.PIPE,
+        stdin=sb.PIPE,
+        text=True,
+        bufsize=1,
+        env={**os.environ, "XDG_RUNTIME_DIR": str(tmp_path)},
+    )
 
     assert proc.stdout is not None
 
@@ -112,7 +111,7 @@ def compositor(tmp_path_factory) -> Generator:
 
     # Must use absolute path to display, because we cannot rely on
     # $XDG_RUNTIME_DIR
-    comp = Compositor(proc, tmp_path / 'test')
+    comp = Compositor(proc, tmp_path / "test")
 
     yield comp
 
@@ -130,15 +129,17 @@ class IpcMessage(NamedTuple):
     Represents an IPC message, which has a message type and payload. If the IPC
     message has an SCM_RIGHTS fd, then it will be mapped to 'aux_data".
     """
+
     msg_type: MessageType
     msg: Any
     aux_data: bytes | None
 
 
-class Daemon():
+class Daemon:
     """
     Represents the swayclip daemon, can communicate with IPC.
     """
+
     proc: sb.Popen
 
     sock: socket.socket
@@ -163,17 +164,16 @@ class Daemon():
         self.ipc_path = dir / "ipc.socket"
 
         self.proc = sb.Popen(
-                [path, '-r', '-d',
-                 '-c', str(self.config_path),
-                 '-s', str(self.db_path)],
-                stdout=sb.PIPE,
-                text=True,
-                bufsize=1,
-                env={
-                    **os.environ,
-                    'SWAYCLIP_SOCK': str(self.ipc_path),
-                    'WAYLAND_DISPLAY': str(display),
-                    })
+            [path, "-r", "-d", "-c", str(self.config_path), "-s", str(self.db_path)],
+            stdout=sb.PIPE,
+            text=True,
+            bufsize=1,
+            env={
+                **os.environ,
+                "SWAYCLIP_SOCK": str(self.ipc_path),
+                "WAYLAND_DISPLAY": str(display),
+            },
+        )
 
         # Wait for initial ready message
         assert self.proc.stdout is not None
@@ -184,9 +184,9 @@ class Daemon():
         self.events = []
 
     def _subscribe(self):
-        assert self.roundtrip(
-                {'type': 'subscribe', 'events': self.events}).msg \
-                == {'type': 'success'}
+        assert self.roundtrip({"type": "subscribe", "events": self.events}).msg == {
+            "type": "success"
+        }
 
     def add_events(self, events: list[str]):
         self.events.extend(events)
@@ -212,8 +212,7 @@ class Daemon():
         else:
             self.sock.sendall(packet)
 
-    def _recv_exact(self, n: int, want_fd: bool = False) -> tuple[bytes, int |
-                                                                  None]:
+    def _recv_exact(self, n: int, want_fd: bool = False) -> tuple[bytes, int | None]:
         """
         Receive exactly "n" bytes from socket. If "want_fd" is True, then also
         return the SCM_RIGHTS fd if any, otherwise None.
@@ -224,14 +223,12 @@ class Daemon():
         while len(buf) < n:
             if want_fd and scm_fd is None:
                 ancbuf_size = socket.CMSG_SPACE(struct.calcsize("i"))
-                chunk, ancdata, _, _addr = self.sock.recvmsg(
-                    n - len(buf), ancbuf_size
-                )
+                chunk, ancdata, _, _addr = self.sock.recvmsg(n - len(buf), ancbuf_size)
                 for level, type_, cmsg_data in ancdata:
                     if level == socket.SOL_SOCKET and type_ == socket.SCM_RIGHTS:
-                        scm_fd = struct.unpack(
-                            "i", cmsg_data[: struct.calcsize("i")]
-                        )[0]
+                        scm_fd = struct.unpack("i", cmsg_data[: struct.calcsize("i")])[
+                            0
+                        ]
             else:
                 chunk = self.sock.recv(n - len(buf))
 
@@ -245,7 +242,7 @@ class Daemon():
         Receive a message from the daemon
         """
         header, fd = self._recv_exact(5, want_fd=True)
-        (msg_type, size) = struct.unpack("=BI", header)
+        msg_type, size = struct.unpack("=BI", header)
 
         # Only keep asking for the body if we haven't already picked up
         # the fd while reading the header.
@@ -266,13 +263,9 @@ class Daemon():
             finally:
                 os.close(fd)
 
-        return IpcMessage(
-            msg_type=MessageType(msg_type), msg=msg, aux_data=aux_data
-        )
+        return IpcMessage(msg_type=MessageType(msg_type), msg=msg, aux_data=aux_data)
 
-    def roundtrip(
-            self, msg: dict[str, Any],
-            scm_fd: int | None = None) -> IpcMessage:
+    def roundtrip(self, msg: dict[str, Any], scm_fd: int | None = None) -> IpcMessage:
         """Do a roundtrip (send message -> receive response)"""
         self.send_msg(msg, scm_fd)
         return self.recv_msg()
@@ -281,8 +274,8 @@ class Daemon():
         """Receive an event and remove it from the events list"""
         msg = self.recv_msg()
         self.remove_events([event])
-        assert 'event' in msg.msg
-        assert msg.msg['event'] == event
+        assert "event" in msg.msg
+        assert msg.msg["event"] == event
         return msg
 
     def close(self):
@@ -309,23 +302,25 @@ def daemon_runner(tmp_path) -> Generator:
 
 
 def cmp_entry(
-        entry: dict[str, Any],
-        id: int,
-        mime_types: list[str],
-        pinned: bool,
-        content_type: str | None,
-        content_mime: str | None) -> None:
+    entry: dict[str, Any],
+    id: int,
+    mime_types: list[str],
+    pinned: bool,
+    content_type: str | None,
+    content_mime: str | None,
+) -> None:
     """
     Assert if "entry" has the given values, ignoring creation time and update
     time
     """
-    assert entry['id'] == id
-    assert Counter(entry['mime_types']) == Counter(mime_types)
-    assert entry['pinned'] == pinned
+    assert entry["id"] == id
+    assert Counter(entry["mime_types"]) == Counter(mime_types)
+    assert entry["pinned"] == pinned
     if content_type is not None:
-        assert entry['content_type'] == content_type
+        assert entry["content_type"] == content_type
     if content_mime is not None:
-        assert entry['content_mime_type'] == content_mime
+        assert entry["content_mime_type"] == content_mime
+
 
 def wait_cond(func: Callable, timeout: float = 1):
     start = time.time()
@@ -333,7 +328,7 @@ def wait_cond(func: Callable, timeout: float = 1):
     while True:
         try:
             func()
-            break # Success
+            break  # Success
         except:
             if time.time() - start > 2:
                 raise

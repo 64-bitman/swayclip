@@ -103,7 +103,8 @@ static const struct stmt_def stmt_defs[] = {
         update_sort_index,
         "UPDATE Entries SET Sort_index = (SELECT COALESCE(MAX(Sort_index), 0) "
         "+ 1 FROM Entries) WHERE Id = ?;"
-    )
+    ),
+    STMT(get_pinned, "SELECT Pinned FROM Entries WHERE Id = ?;")
 };
 
 static bool
@@ -930,5 +931,30 @@ database_update_sort_index(struct database *db, int64_t id)
         return true;
 
     log_error("Error updating sort index: %s", sqlite3_errmsg(db->handle));
+    return false;
+}
+
+bool
+database_entry_is_pinned(struct database *db, int64_t id)
+{
+    sqlite3_stmt *stmt = db->stmt.get_pinned;
+
+    assert(!sqlite3_stmt_busy(stmt));
+    sqlite3_bind_int64(stmt, 1, id);
+
+    int ret = sqlite3_step(stmt);
+
+    if (ret == SQLITE_ROW)
+    {
+        bool pinned = sqlite3_column_int(stmt, 0);
+
+        sqlite3_reset(stmt);
+        return pinned;
+    }
+
+    sqlite3_reset(stmt);
+    log_error(
+        "Error getting pinned status of entry: %s", sqlite3_errmsg(db->handle)
+    );
     return false;
 }

@@ -770,7 +770,8 @@ help_pin(void)
     printf("Pin entry to prevent it from being automatically removed.\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -u, --unpin       Unpin entry\n");
+    printf("  -u, --unpin       Unpin entry.\n");
+    printf("  -t, --toggle      Toggle pinned status of entry.\n");
     printf("  -h, --help        Show this help message.\n");
     // clang-format on
 }
@@ -780,6 +781,7 @@ command_pin(int argc, char **argv)
 {
     static const struct option options[] = {
         {"unpin", no_argument, 0, 'u'},
+        {"toggle", no_argument, 0, 't'},
         {"help", no_argument, 0, 'h'},
         {NULL, 0, 0, 0}
     };
@@ -788,13 +790,17 @@ command_pin(int argc, char **argv)
     int idx;
 
     bool pin = true;
+    bool toggle = false;
 
-    while ((c = getopt_long(argc, argv, "+uh", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "+uth", options, &idx)) != -1)
     {
         switch (c)
         {
         case 'u':
             pin = false;
+            break;
+        case 't':
+            toggle = true;
             break;
         case 'h':
             help_pin();
@@ -814,13 +820,22 @@ command_pin(int argc, char **argv)
 
     struct message resp;
 
+    const char *pinstr;
+
+    if (toggle)
+        pinstr = "toggle";
+    else if (pin)
+        pinstr = "yes";
+    else
+        pinstr = "no";
+
     CHECK(roundtrip(
         build_json_object(
             NULL,
             -1,
             JSON_STR("type", IPC_REQ_PIN_ENTRY),
             JSON_INT("id", id),
-            JSON_BOOL("pin", pin),
+            JSON_STR("pin", pinstr),
             NULL
         ),
         &resp

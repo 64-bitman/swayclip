@@ -54,9 +54,10 @@ All commands have a "--help" option, which provides a quick summary.
 	Delete the entry specified by "ID". If the clipboard was set to this entry,
 	then it will be cleared (the previous entry is not used).
 
-*pin [--unpin] <ID>*
+*pin [--unpin] [--toggle] <ID>*
 	Pin the entry specified by "ID". A pinned entry is not trimmed from the
-	clipboard history. If "--unpin" is provided, then unpin the entry.
+	clipboard history. If "--unpin" is provided, then unpin the entry. If
+	"--toggle" is provided, then toggle the pinned status of the entry.
 
 *events <events>*
 	Output a JSON stream of events from the daemon. "events" is a list of events

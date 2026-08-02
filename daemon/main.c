@@ -772,11 +772,13 @@ request_callback(
     }
     else if (strcmp(type, IPC_REQ_PIN_ENTRY) == 0)
     {
-        int64_t id;
-        bool    pin;
+        int64_t     id;
+        const char *pinstr;
 
-        if (!extract_json_object(
-                req->payload, JSON_INT("id", &id), JSON_BOOL("pin", &pin), NULL
+        if (!extract_json_object( req->payload,
+                JSON_INT("id", &id),
+                JSON_STR("pin", &pinstr),
+                NULL
             ))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
@@ -788,6 +790,20 @@ request_callback(
             ipc_client_send_error(
                 client, "Entry id %" PRId64 " does not exist", id
             );
+            return;
+        }
+
+        bool pin;
+
+        if (strcmp(pinstr, "yes") == 0)
+            pin = true;
+        else if (strcmp(pinstr, "no") == 0)
+            pin = false;
+        else if (strcmp(pinstr, "toggle") == 0)
+            pin = !database_entry_is_pinned(&state->db, id);
+        else
+        {
+            ipc_client_send_error(client, IPC_INVALID_ARGS);
             return;
         }
 
