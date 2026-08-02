@@ -758,6 +758,15 @@ request_callback(
             return;
         }
 
+        // If deleted entry was set as the clipboard, then clear the clipboard
+        if (id == state->id)
+        {
+            // Don't want to send "clipboard_state" event for the now deleted
+            // entry.
+            state->id = -1;
+            set(state, NULL, -1);
+        }
+
         ipc_client_send_success(client);
         ipc_event_entry_delete(&state->ipc, id);
     }
