@@ -775,7 +775,8 @@ request_callback(
         int64_t     id;
         const char *pinstr;
 
-        if (!extract_json_object( req->payload,
+        if (!extract_json_object(
+                req->payload,
                 JSON_INT("id", &id),
                 JSON_STR("pin", &pinstr),
                 NULL
