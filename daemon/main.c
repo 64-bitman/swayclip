@@ -958,8 +958,9 @@ main(int argc, char **argv)
     }
 
     // We set the selections later when the Wayland seat is started (see
-    // wayland.c)
-    if (!database_get_setting(&state.db, DB_SETTING_LAST_ENTRY, 'i', &state.id))
+    // wayland.c). Dont use last entry is "set_on_startup" config opt is false.
+    if (!state.config.set_on_startup ||
+        !database_get_setting(&state.db, DB_SETTING_LAST_ENTRY, 'i', &state.id))
         state.id = -1;
     state.cleared = false;
 

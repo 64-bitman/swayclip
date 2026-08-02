@@ -151,6 +151,7 @@ config_init(struct config *config, const char *file)
         .persist = true,
         .regular = true,
         .primary = true,
+        .set_on_startup = true,
         .dedup = DEDUP_ALL
     };
 
@@ -165,6 +166,7 @@ config_init(struct config *config, const char *file)
         CONFIG_BOOLEAN("daemon.regular", &config->regular),
         CONFIG_BOOLEAN("daemon.primary", &config->primary),
         CONFIG_TABLE("daemon.seats", config, extract_configured_seats),
+        CONFIG_BOOLEAN("daemon.set_on_startup", &config->set_on_startup),
         CONFIG_STRING_CUSTOM("daemon.dedup", &config->dedup, extract_dedup),
         CONFIG_ARRAY(
             "daemon.mime_types.allowed",

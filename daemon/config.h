@@ -56,6 +56,8 @@ struct config
     bool regular;
     bool primary;
 
+    bool set_on_startup;
+
     // Setting for deduplication of entries.
     // "none" - don't deduplicate entries
     // "prev" - only check previous entry
