@@ -33,17 +33,18 @@ swayclip - Clipboard manager for Wayland compositors
 
 # DESCRIPTION
 
-swayclip is a clipboard manager that provides persistent history and supports
-multiple Wayland seats. The running Wayland compositor must support the
-*ext-data-control-v1* protocol, which you can check if available using the
-*wayland-info* command line utility, usually provided with libwayland.
+swayclip is a clipboard manager, it remembers things you've copied so you
+can access them later, and it works across multiple Wayland seats (see
+*swayclip*(5) for what that means). For it to work, your Wayland compositor
+needs to support the *ext-data-control-v1* protocol. You can check whether yours
+does by running the *wayland-info* command, which should come bundled with
+libwayland.
 
-A common problem with the Wayland protocol is that the compositor does not store
-the clipboard contents, instead the source client does. This results in the
-clipboard/selection being cleared when the source client exits. swayclip solves
-this problem by storing the contents of the clipboard, and only becomes the
-source client when the existing source client exits, or if the clipboard is
-cleared directly.
+In Wayland, whatever app you copied something from is the one actually
+holding onto that clipboard content, the compositor itself doesn't store it.
+This means if you close that app, whatever you copied disappears too. swayclip
+fixes this by keeping its own copy of your clipboard history, and only steps in
+to "hold" the clipboard once the original app closes or exits.
 
 # CONFIGURATION
 
