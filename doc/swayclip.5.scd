@@ -45,8 +45,7 @@ These options go under a section called *"daemon"* in the settings file.
 	
 *max_size = <integer>*
 	The largest size (in bytes) that a single copied item is allowed to be. If
-	you copy something bigger than this, it's simply not saved — nothing bad
-	happens, it just won't show up in your history. Default: 20 MB.
+	you copy something bigger than this, it will not be saved. Default: 20 MB.
 
 *persist = <boolean>*
 	Whether your clipboard history is saved to disk. If turned on (true), your
@@ -59,8 +58,9 @@ These options go under a section called *"daemon"* in the settings file.
 	by swayclip. Default: true (tracked).
 
 *primary = <boolean>*
-	Whether "primary selection" — the clipboard you get just from highlighting
-	text, which some apps let you paste with a middle-click — should be tracked.
+	Whether "primary selection" should be tracked. It is the clipboard you get
+	usually from highlighting text, which some apps let you paste with a
+	middle-click.
 	Default: true (tracked).
 
 *set_on_startup = <boolean>*
@@ -81,9 +81,9 @@ These options go under a section called *"daemon"* in the settings file.
 		entry further back in your history, still save it as new.
 
 	*all*
-		If you copy something that matches ANY previous entry anywhere in your
-		history, don't create a new entry — instead just move that older
-		matching entry back up to the top of the list.
+		If you copy something that matches any previous entry anywhere in your
+		history, don't create a new entry, instead just move that older matching
+		entry back up to the top of the list.
 
 These options go under a *"mime_types"* section, which itself lives inside the
 *"daemon"* section. They let you control which kinds of content get saved.
@@ -100,7 +100,7 @@ These options go under a *"mime_types"* section, which itself lives inside the
 	you can exclude them.
 
 These options go under a *"seats"* section, which also lives inside the
-*"daemon"* section. Most people can skip this entirely — it's only useful if you
+*"daemon"* section. Most users can skip this entirely, it's only useful if you
 have more than one "seat" (see the Terminology section above) and want different
 clipboard behavior for each one.
 
@@ -117,7 +117,7 @@ clipboard behavior for each one.
 		If not set, it uses whatever "daemon.primary" is set to.
 
 If you don't include a "seats" section at all, swayclip will just track the
-clipboard for every seat automatically — which is what most people want.
+clipboard for every seat automatically, which is what most users want.
 
 # EXAMPLE
 
