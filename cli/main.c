@@ -33,17 +33,17 @@ help(void)
     printf("Usage: swctl [OPTIONS] <COMMAND>\n");
     printf("\n");
     printf("Commands:\n");
-    printf("  list      List entries in clipboard history\n");
-    printf("  len       Get number of entries in history\n");
-    printf("  set       Set current entry\n");
-    printf("  get       Get contents of entry\n");
-    printf("  delete    Delete entry\n");
-    printf("  pin       Pin entry\n");
-    printf("  events    Listen for events\n");
+    printf("  list      List entries in clipboard history.\n");
+    printf("  len       Get number of entries in history.\n");
+    printf("  set       Set current entry.\n");
+    printf("  get       Get contents of entry.\n");
+    printf("  delete    Delete entry.\n");
+    printf("  pin       Pin an entry.\n");
+    printf("  events    Listen for events.\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -h, --help        Show this help message\n");
-    printf("  -v, --version     Show version\n");
+    printf("  -h, --help        Show this help message.\n");
+    printf("  -v, --version     Show version.\n");
 }
 
 static bool
@@ -304,10 +304,10 @@ help_list(void)
             "in format for use by pickers, or as a JSON array.\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -j, --json        Output JSON\n");
-    printf("  -s, --start       Position to start at (default=0)\n");
-    printf("  -n, --number      Number of entries to list (default=INT64_MAX)\n");
-    printf("  -h, --help        Show this help message\n");
+    printf("  -j, --json        Output JSON.\n");
+    printf("  -s, --start       Position to start at (default=0).\n");
+    printf("  -n, --number      Number of entries to list (default=INT64_MAX).\n");
+    printf("  -h, --help        Show this help message.\n");
     // clang-format on
 }
 
@@ -477,7 +477,7 @@ help_len(void)
     printf("Output number of entries in clipboard history.\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -h, --help        Show this help message\n");
+    printf("  -h, --help        Show this help message.\n");
     // clang-format on
 }
 
@@ -537,9 +537,9 @@ help_set(void)
     printf("Set clipboard to entry\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -c, --clear       Clear clipboard\n");
-    printf("  -d, --decode      Decode format used by \"swctl list\" from stdin\n");
-    printf("  -h, --help        Show this help message\n");
+    printf("  -c, --clear       Clear clipboard.\n");
+    printf("  -d, --decode      Decode format used by \"swctl list\" from stdin.\n");
+    printf("  -h, --help        Show this help message.\n");
     // clang-format on
 }
 
@@ -628,7 +628,7 @@ help_get(void)
     printf("Get contents of mime type for entry\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -h, --help        Show this help message\n");
+    printf("  -h, --help        Show this help message.\n");
     // clang-format on
 }
 
@@ -698,7 +698,7 @@ help_delete(void)
     printf("Delete entry with ID from clipboard history.\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -h, --help        Show this help message\n");
+    printf("  -h, --help        Show this help message.\n");
     // clang-format on
 }
 
@@ -762,7 +762,7 @@ help_pin(void)
     printf("\n");
     printf("Options:\n");
     printf("  -u, --unpin       Unpin entry\n");
-    printf("  -h, --help        Show this help message\n");
+    printf("  -h, --help        Show this help message.\n");
     // clang-format on
 }
 
@@ -833,7 +833,7 @@ help_events(void)
     printf("Output JSON stream of events.\n");
     printf("\n");
     printf("Options:\n");
-    printf("  -h, --help        Show this help message\n");
+    printf("  -h, --help        Show this help message.\n");
     // clang-format on
 }
 
