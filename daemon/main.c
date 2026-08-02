@@ -111,24 +111,26 @@ update(struct state *state, int64_t id, const bool *pinned)
     return true;
 }
 
+/*
+ * Note that this does not update "update_time"
+ */
 static void
-set(struct state *state, struct selection *ignore)
+set(struct state *state, struct selection *ignore, int64_t id)
 {
     if (state->id != -1)
         ipc_event_clipboard_state(&state->ipc, state->id, false);
 
-    if (database_save_setting(
-            &state->db, DB_SETTING_LAST_ENTRY, 'i', state->id
-        ))
-        wayland_set(&state->wayland, ignore);
-    else
-        state->id = -1;
+    state->id = id;
+    if (state->id == -1)
+        state->cleared = true;
+
+    (void)database_save_setting(
+        &state->db, DB_SETTING_LAST_ENTRY, 'i', state->id
+    );
+    wayland_set(&state->wayland, ignore);
 
     if (state->id != -1)
-    {
         ipc_event_clipboard_state(&state->ipc, state->id, true);
-        update(state, state->id, NULL);
-    }
 }
 
 static void
@@ -331,6 +333,8 @@ exit:
     if (moved)
     {
         ret = database_update_sort_index(&state->db, id);
+        if (ret)
+            ret = update(state, id, NULL);
         ignore = true;
     }
 
@@ -357,11 +361,9 @@ exit:
 
             ipc_event_entry_add(&state->ipc, id);
         }
-        state->id = id;
-
         // Do not become the source client for the selection that the event came
         // from.
-        set(state, sel);
+        set(state, sel, id);
     }
     else if (!ignore)
         state->id = -1;
@@ -726,12 +728,11 @@ request_callback(
             return;
         }
 
-        state->id = id;
-        if (id == -1)
-            state->cleared = true;
-        set(state, NULL);
-
-        ipc_client_send_success(client);
+        set(state, NULL, id);
+        if (update(state, id, NULL))
+            ipc_client_send_success(client);
+        else
+            ipc_client_send_error(client, IPC_DB_ERROR);
     }
     else if (strcmp(type, IPC_REQ_DELETE_ENTRY) == 0)
     {
@@ -781,10 +782,10 @@ request_callback(
             return;
         }
 
-        if (!update(state, id, &pin))
-            ipc_client_send_error(client, IPC_DB_ERROR);
-        else
+        if (update(state, id, &pin))
             ipc_client_send_success(client);
+        else
+            ipc_client_send_error(client, IPC_DB_ERROR);
     }
     else
         ipc_client_send_error(client, IPC_INVALID_ARGS);

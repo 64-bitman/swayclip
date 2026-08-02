@@ -217,6 +217,8 @@ database_init(struct database *db, const char *db_path, struct config *config)
             ") AND EXISTS (SELECT 1 FROM Settings WHERE Key = 'Max_entries');"
         );
 
+    log_debug("Initialized databasae at \"%s\"", db->path);
+
     return true;
 }
 
