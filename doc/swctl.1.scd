@@ -43,7 +43,7 @@ All commands have a "--help" option, which provides a quick summary.
 	Set the clipboard to the entry specified by "ID". If "--clear" is provided,
 	then the clipboard will be cleared, and "ID" is not necessary.
 
-	If "--decode" is provided, then parse the input from the "list" command,
+	If "--decode" is provided, then parse the output from the "list" command,
 	which should be a single line.
 
 *get <ID> <MIME TYPE>*
@@ -102,19 +102,19 @@ All commands have a "--help" option, which provides a quick summary.
 		*swayclip*(5) for more information.
 		```
 		{
-			"event": "entry_update",
+			"event": "entry_move",
 			"id": <ID>,
 			"old_pos": <int>,
 		}
 		```
 
-	*clipboard_state*
+	*entry_state*
 		Emitted when the state of an entry changes. If "state" is true, then the
 		entry is set as the current entry for the clipboard, otherwise the entry
 		was unset as the current entry.
 		```
 		{
-			"event": "entry_update",
+			"event": "entry_state",
 			"id": <ID>,
 			"state": <bool>,
 		}
