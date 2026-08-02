@@ -24,6 +24,7 @@
     } while (false)
 
 static struct ipc_ct ict;
+static bool          ict_init = false;
 
 xarray_create(char, input, uint32_t, 256, 2.0);
 
@@ -82,6 +83,7 @@ init_ipc(struct ipc_ct *ict)
         close(fd);
         return false;
     }
+    ict_init = true;
     return true;
 }
 
@@ -964,7 +966,7 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    bool ret = true, unknown = false;
+    bool ret = true;
 
     const char *cmd = argv[optind];
 
@@ -990,10 +992,9 @@ main(int argc, char **argv)
     {
         log_error("Unknown subcommand \"%s\"", cmd);
         ret = false;
-        unknown = true;
     }
 
-    if (!unknown)
+    if (ict_init)
         ipc_ct_uninit(&ict);
 
     return ret ? EXIT_SUCCESS : EXIT_FAILURE;
