@@ -65,6 +65,6 @@ Written and maintained by Foxe Chen.
 
 # SEE ALSO
 
-*swayclip*(5) *swctl*(1) *swayclip-ipc*(7)
+*swayclip*(5) *swctl*(1)
 
 ; vim: ft=scdoc
