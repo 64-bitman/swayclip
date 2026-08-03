@@ -121,6 +121,12 @@ use KDE...
 
 </details>
 
+# Plans
+
+- [ ] Add a GTK4 client
+- [ ] Stabilize IPC interface, probably after GTK4 client is implemented
+- [ ] Document IPC interface when its stabilized
+
 # Mentions
 
 - [tomlc17](https://github.com/cktan/tomlc17) - Used to parse config file
