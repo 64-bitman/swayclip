@@ -157,12 +157,19 @@ eventloop_run(struct eventloop *loop)
                 eventprepare_del(prepare);
         }
 
-        int n_ev = epoll_wait(loop->epoll, evs, MAX_EVENTS, -1);
-
-        if (n_ev == -1)
+        int n_ev;
+        while (true)
         {
-            log_errerror("epoll_wait() error");
-            return false;
+            n_ev = epoll_wait(loop->epoll, evs, MAX_EVENTS, -1);
+
+            if (n_ev == -1)
+            {
+                if (errno == EINTR)
+                    continue;
+                log_errerror("epoll_wait() error");
+                return false;
+            }
+            break;
         }
 
         for (int i = 0; i < n_ev; i++)
