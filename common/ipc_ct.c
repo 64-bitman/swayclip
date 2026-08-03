@@ -120,7 +120,9 @@ ipc_ct_uninit(struct ipc_ct *ict)
     if (ict->scm_fd != -1)
         close(ict->scm_fd);
 
-    close(ict->fd);
+    // Caller may set this to -1 if they closed it beforehand
+    if (ict->fd != -1)
+        close(ict->fd);
     json_tokener_free(ict->tokener);
 }
 
@@ -326,7 +328,7 @@ ipc_ct_has_pending_writes(struct ipc_ct *ict)
  * "msg" is NULL, nothing is written. If "scm_fd" is not -1, then it sent along
  * the message over the socket using SCM_RIGHTS.
  */
-void
+bool
 ipc_ct_write_msg(
     struct ipc_ct        *ict,
     enum ipc_message_type type,
@@ -373,10 +375,10 @@ ipc_ct_write_msg(
         goto fail;
     }
     json_object_put(msg);
-    return;
+    return true;
 fail:
     json_object_put(msg);
     if (scm_fd != -1)
         close(scm_fd);
-    return;
+    return false;
 }

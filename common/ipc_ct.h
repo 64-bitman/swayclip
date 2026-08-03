@@ -108,5 +108,5 @@ void ipc_ct_uninit(struct ipc_ct *ict);
 bool ipc_ct_read(struct ipc_ct *ict, uint flags, ipc_msg_callback callback, void *udata);
 bool ipc_ct_write(struct ipc_ct *ict, bool *need_poll);
 bool ipc_ct_has_pending_writes(struct ipc_ct *ict);
-void ipc_ct_write_msg(struct ipc_ct *ict, enum ipc_message_type type, struct json_object *msg, int scm_fd);
+bool ipc_ct_write_msg(struct ipc_ct *ict, enum ipc_message_type type, struct json_object *msg, int scm_fd);
 // clang-format on
