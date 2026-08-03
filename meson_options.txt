@@ -1,2 +1,3 @@
 option('swctl', type: 'boolean', value: true, description: 'Install swctl utility tool')
 option('man-pages', type: 'boolean', value: true, description: 'Install man pages')
+option('gtk', type: 'boolean', value: true, description: 'Install GTK interface')

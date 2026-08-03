@@ -72,4 +72,7 @@ subdir('daemon')
 if get_option('swctl')
   subdir('cli')
 endif
+if get_option('gtk')
+  subdir('gtk')
+endif
 subdir('tests')
