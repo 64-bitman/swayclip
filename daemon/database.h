@@ -73,10 +73,11 @@ struct database
         sqlite3_stmt *update_sort_index;
 
         sqlite3_stmt *get_pinned;
+
+        sqlite3_stmt *trim;
     } stmt;
 };
 
-#define DB_SETTING_MAX_ENTRIES "Max_entries"
 #define DB_SETTING_LAST_ENTRY "Last_entry"
 
 #define DB_ATTRIBUTE_CONTENT_TYPE "$.content_type"
@@ -85,6 +86,7 @@ struct database
 // clang-format off
 typedef void (*db_mime_type_callback)(const char *mime_type, void *udata);
 typedef void (*db_entry_callback)(int64_t id, int64_t creation_time, int64_t update_time, bool pinned, void *udata);
+typedef void (*db_trim_callback)(int64_t id, void *udata);
 // clang-format on
 
 // clang-format off
@@ -108,4 +110,5 @@ bool database_set_entry_hash(struct database *db, int64_t id, uint8_t hash[SHA25
 int64_t database_entry_hash_pos(struct database *db, uint8_t hash[SHA256_BLOCK_SIZE], int64_t *id);
 bool database_update_sort_index(struct database *db, int64_t id);
 bool database_entry_is_pinned(struct database *db, int64_t id);
+bool database_trim(struct database *db, db_trim_callback callback, void *udata);
 // clang-format on

@@ -195,9 +195,11 @@ def test_trim(compositor: Compositor, daemon_runner: Callable):
     compositor.copy("test", Selection.REGULAR, {"x": "y"})
     daemon.recv_event("entry_add")
 
-    daemon.add_events(["entry_add"])
+    # There should be no "entry_delete" events emitted
+    daemon.add_events(["entry_add", "entry_delete"])
     compositor.copy("test", Selection.REGULAR, {"f": "g"})
     daemon.recv_event("entry_add")
+    daemon.remove_events(["entry_delete"])
 
     assert daemon.roundtrip({"type": "get_history_length"}).msg == {"size": 3}
 
@@ -206,9 +208,11 @@ def test_trim(compositor: Compositor, daemon_runner: Callable):
     cmp_entry(msg.msg[1], 2, ["x"], False, None, None)
     cmp_entry(msg.msg[0], 3, ["f"], False, None, None)
 
-    daemon.add_events(["entry_add"])
+    daemon.add_events(["entry_add", "entry_delete"])
     compositor.copy("test", Selection.REGULAR, {"m": "n"})
-    daemon.recv_event("entry_add")
+    assert daemon.recv_msg().msg == {'event': 'entry_add', 'id': 4}
+    assert daemon.recv_msg().msg == {'event': 'entry_delete', 'id': 2}
+    daemon.remove_events(["entry_add", "entry_delete"])
 
     msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 3})
     cmp_entry(msg.msg[2], 1, ["a"], True, None, None)

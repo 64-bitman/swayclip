@@ -155,6 +155,14 @@ get_content_type(const char *mime_type)
 }
 
 static void
+trim_callback(int64_t id, void *udata)
+{
+    struct state *state = udata;
+
+    ipc_event_entry_delete(&state->ipc, id);
+}
+
+static void
 wsignal_selection(
     struct selection                 *sel,
     struct ext_data_control_offer_v1 *offer,
@@ -367,6 +375,8 @@ exit:
     }
     else if (!ignore)
         state->id = -1;
+
+    (void)database_trim(&state->db, trim_callback, state);
 }
 
 static bool

@@ -25,7 +25,7 @@ PRAGMA foreign_keys = ON;
 PRAGMA recursive_triggers = NO;
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
-PRAGMA user_version = 1;
+PRAGMA user_version = 2; -- Make sure to sync with USER_VERSION in database.c
 
 CREATE TABLE IF NOT EXISTS Settings (
     Key             TEXT PRIMARY KEY,
@@ -63,18 +63,6 @@ CREATE TABLE IF NOT EXISTS Data (
 
 CREATE INDEX IF NOT EXISTS idx_mime_types_data_id ON Mime_types (Data_id);
 CREATE INDEX IF NOT EXISTS idx_entries_pinned_sort ON Entries (Pinned, Sort_index DESC);
-
--- Don't trim pinned entries
-CREATE TRIGGER IF NOT EXISTS trim_entries
-AFTER INSERT ON Entries
-WHEN (SELECT Value FROM Settings WHERE Key = 'Max_entries') IS NOT NULL BEGIN
-    DELETE FROM Entries WHERE Id IN (
-        SELECT Id FROM Entries WHERE Pinned = 0
-        ORDER BY Sort_index DESC LIMIT -1 OFFSET (
-            SELECT CAST(Value AS INTEGER) FROM Settings WHERE Key = 'Max_entries'
-        )
-    );
-END;
 
 CREATE TRIGGER IF NOT EXISTS del_data_row
 AFTER DELETE ON Mime_types

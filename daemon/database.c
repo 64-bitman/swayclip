@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#define USER_VERSION 2
+
 #include "database.h"
 #include "common/io.h"
 #include "common/log.h"
@@ -104,7 +106,12 @@ static const struct stmt_def stmt_defs[] = {
         "UPDATE Entries SET Sort_index = (SELECT COALESCE(MAX(Sort_index), 0) "
         "+ 1 FROM Entries) WHERE Id = ?;"
     ),
-    STMT(get_pinned, "SELECT Pinned FROM Entries WHERE Id = ?;")
+    STMT(get_pinned, "SELECT Pinned FROM Entries WHERE Id = ?;"),
+    STMT(
+        trim,
+        "DELETE FROM Entries WHERE Id IN (SELECT Id FROM Entries WHERE Pinned "
+        "= 0 ORDER BY Id DESC LIMIT -1 OFFSET ?) RETURNING Id;"
+    )
 };
 
 static bool
@@ -120,6 +127,20 @@ database_execute_statement(struct database *db, const char *statement)
         return false;
     }
     return true;
+}
+
+static void
+migrate_database(struct database *db, int old_ver)
+{
+    // Probably should put this in a for loop to incremently modify database in
+    // case user version is bumped up again.
+    if (old_ver == 1)
+    {
+        // Delete trim trigger, we now do that manually
+        (void)database_execute_statement(
+            db, "DROP TRIGGER IF EXISTS trim_entries;"
+        );
+    }
 }
 
 bool
@@ -156,6 +177,7 @@ database_init(struct database *db, const char *db_path, struct config *config)
         return false;
 
     db->path = path;
+    db->config = config;
 
     int flags =
         SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX;
@@ -173,6 +195,29 @@ database_init(struct database *db, const char *db_path, struct config *config)
             sqlite3_close(db->handle);
         free(path);
         return false;
+    }
+
+    // Check user version
+    {
+        sqlite3_stmt *stmt;
+
+        ret = sqlite3_prepare_v2(
+            db->handle, "PRAGMA user_version;", -1, &stmt, NULL
+        );
+        if (ret != SQLITE_OK)
+        {
+            sqlite3_finalize(stmt);
+            sqlite3_close(db->handle);
+            free(path);
+            return false;
+        }
+
+        ret = sqlite3_step(stmt);
+        int user_ver = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+
+        if (user_ver != USER_VERSION)
+            migrate_database(db, user_ver);
     }
 
     // Set up database schema
@@ -203,20 +248,10 @@ database_init(struct database *db, const char *db_path, struct config *config)
         }
     }
 
-    if (database_save_setting(
-            db, DB_SETTING_MAX_ENTRIES, 'i', config->max_entries
-        ))
-        // Do an initial trim in case "max_entries" changed.
-        (void)database_execute_statement(
-            db,
-            "DELETE FROM Entries WHERE Id IN ("
-            "    SELECT Id FROM Entries WHERE Pinned = 0"
-            "    ORDER BY Id DESC LIMIT -1 OFFSET ("
-            "        SELECT CAST(Value AS INTEGER) FROM Settings WHERE Key = "
-            "           'Max_entries'"
-            "    )"
-            ") AND EXISTS (SELECT 1 FROM Settings WHERE Key = 'Max_entries');"
-        );
+    // Do an initial trim in case "max_entries" changed. Do not need to worry
+    // about emitting "entry_delete" IPC event, because database is initialized
+    // before IPC server.
+    (void)database_trim(db, NULL, NULL);
 
     log_debug("Initialized databasae at \"%s\"", db->path);
 
@@ -265,14 +300,6 @@ database_save_setting(struct database *db, const char *key, int type, ...)
     case 'i':
         sqlite3_bind_int64(stmt, 2, va_arg(ap, int64_t));
         break;
-    case 'b':
-    {
-        const uint8_t *blob = va_arg(ap, const uint8_t *);
-        int            sz = va_arg(ap, int);
-
-        sqlite3_bind_blob(stmt, 2, blob, sz, SQLITE_STATIC);
-        break;
-    }
     default:
         log_abort("Unsupported type %d for database setting", type);
     }
@@ -331,27 +358,6 @@ database_get_setting(struct database *db, const char *key, int type, ...)
     case 'i':
         *(va_arg(ap, int64_t *)) = sqlite3_column_int64(stmt, 0);
         break;
-    case 'b':
-    {
-        uint8_t *buf = va_arg(ap, uint8_t *);
-        int      sz = va_arg(ap, int);
-        int     *len = va_arg(ap, int *);
-
-        int            size = sqlite3_column_bytes(stmt, 0);
-        const uint8_t *data = sqlite3_column_blob(stmt, 0);
-
-        if (data == NULL || size != sz)
-        {
-            log_error("Blob setting \"%s\" is invalid", key);
-            res = false;
-            break;
-        }
-
-        memcpy(buf, data, MIN(size, sz));
-        if (len != NULL)
-            *len = size;
-        break;
-    }
     default:
         log_abort("Unsupported type %d for database setting", type);
     }
@@ -957,4 +963,42 @@ database_entry_is_pinned(struct database *db, int64_t id)
         "Error getting pinned status of entry: %s", sqlite3_errmsg(db->handle)
     );
     return false;
+}
+
+/*
+ * Trim excess entries in the database according to "config->max_entries", and
+ * call "callback" for each entry deleted/trimmed. Returns true on success and
+ * false on failure.
+ */
+bool
+database_trim(struct database *db, db_trim_callback callback, void *udata)
+{
+    sqlite3_stmt *stmt = db->stmt.trim;
+
+    assert(!sqlite3_stmt_busy(stmt));
+    sqlite3_bind_int64(stmt, 1, db->config->max_entries);
+
+    int ret;
+
+    while ((ret = sqlite3_step(stmt)) == SQLITE_ROW)
+    {
+        int64_t id = sqlite3_column_int64(stmt, 0);
+
+        if (callback != NULL)
+            callback(id, udata);
+        log_debug("Trimming entry %" PRId64 " from database", id);
+    }
+
+    sqlite3_reset(stmt);
+
+    if (ret != SQLITE_DONE)
+    {
+        log_error(
+            "Error trimming entries from database: %s",
+            sqlite3_errmsg(db->handle)
+        );
+        return false;
+    }
+
+    return true;
 }
