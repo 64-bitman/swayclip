@@ -68,7 +68,7 @@ log_init(const char *log_path)
     const char *no_color = getenv("NO_COLOR");
 
     if ((no_color != NULL && *no_color != NUL) ||
-        (LOG_FP == stderr && !isatty(STDERR_FILENO)))
+        (LOG_FP == stderr && !isatty(STDERR_FILENO)) || log_path != NULL)
         LOG_COLOR = false;
 }
 
