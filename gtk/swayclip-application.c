@@ -17,10 +17,13 @@
  */
 
 #include "swayclip-application.h"
+#include "swayclip-connection.h"
 
 struct _SwayclipApplication
 {
     GtkApplication parent;
+
+    SwayclipConnection *ct;
 };
 
 G_DEFINE_TYPE(SwayclipApplication, swayclip_application, GTK_TYPE_APPLICATION)
