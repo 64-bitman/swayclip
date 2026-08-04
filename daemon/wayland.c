@@ -111,7 +111,6 @@ data_source_event_send(
     wayland->signals.send.callback(
         mime_type, fd, wayland->signals.send.callback_udata
     );
-    close(fd);
 }
 
 static void

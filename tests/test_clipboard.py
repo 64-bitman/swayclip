@@ -88,12 +88,11 @@ def test_receive_existing(compositor: Compositor, daemon_runner: Callable):
     def func():
         msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
         cmp_entry(msg.msg[0], 1, ["text/plain"], False, "text", "text/plain")
-
     wait_cond(func)
 
 
-def test_receive_massive(compositor: Compositor, daemon_runner: Callable):
-    """Test that receiving a lot of data works properly"""
+def test_massive_data(compositor: Compositor, daemon_runner: Callable):
+    """Test that receiving and sending a lot of data works properly"""
     compositor.add_seat("test")
 
     daemon: Daemon = daemon_runner(compositor.display, "")
@@ -107,6 +106,9 @@ def test_receive_massive(compositor: Compositor, daemon_runner: Callable):
 
     assert msg.aux_data is not None
     assert msg.aux_data == b"a" * 2000000
+
+    compositor.copy("test", Selection.REGULAR, None)
+    compositor.expect("test", Selection.REGULAR, {"test": "a" * 2000000})
 
 
 def test_restore(compositor: Compositor, daemon_runner: Callable):

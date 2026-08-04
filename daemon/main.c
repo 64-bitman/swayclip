@@ -58,6 +58,26 @@ static const char *content_names[] = {
     [CONTENT_IMAGE] = "image"
 };
 
+struct state;
+
+xlist_declare(send);
+struct send_context
+{
+    int           fd;
+    struct state *state;
+    sqlite3_blob *blob;
+
+    uint8_t  buf[4096];
+    uint8_t *ptr;       // Pointer to write from
+    int      remaining; // Remaining bytes in "buf"
+
+    int sz;  // Blob size
+    int off; // Offset to read from
+
+    struct xlist_send link;
+};
+xlist_define(send, struct send_context, link);
+
 struct state
 {
     struct eventloop loop;
@@ -74,6 +94,8 @@ struct state
     // entry set, or if "cleared" is true, then clipboard is cleared.
     int64_t id;
     bool    cleared;
+
+    struct xlist_send send_contexes;
 };
 
 static bool
@@ -379,24 +401,74 @@ exit:
     (void)database_trim(&state->db, trim_callback, state);
 }
 
-static bool
-write_callback(uint8_t *buf, size_t sz, size_t *len, void *udata)
+static void
+send_context_free(struct send_context *ctx)
 {
-    struct state *state = ((void **)udata)[0];
-    sqlite3_blob *blob = ((void **)udata)[1];
-    int           blob_sz = *(int *)((void **)udata)[2];
-    int          *off = ((void **)udata)[3];
+    (void)eventloop_del(&ctx->state->loop, ctx->fd);
+    close(ctx->fd);
+    sqlite3_blob_close(ctx->blob);
+    xlist_unlink_send(ctx);
+    free(ctx);
+}
 
-    *len = MIN((size_t)blob_sz - *off, sz);
-    if (sqlite3_blob_read(blob, buf, *len, *off) != SQLITE_OK)
+static bool
+write_callback(int fd, int events, void *udata)
+{
+    struct send_context *ctx = udata;
+
+    if (events & (EPOLLHUP | EPOLLERR))
+        goto end;
+
+    // Keep writing until we get EAGAIN or EWOULDBLOCK
+    while (true)
     {
-        log_error(
-            "Error reading from blob: %s", sqlite3_errmsg(state->db.handle)
-        );
-        return false;
-    }
-    *off += *len;
+        if (ctx->remaining == 0)
+        {
+            int len = MIN((size_t)ctx->sz - ctx->off, sizeof(ctx->buf));
 
+            if (len == 0)
+                goto end;
+
+            if (sqlite3_blob_read(ctx->blob, ctx->buf, len, ctx->off) !=
+                SQLITE_OK)
+            {
+                log_error(
+                    "Error reading from blob: %s",
+                    sqlite3_errmsg(ctx->state->db.handle)
+                );
+                goto end;
+            }
+            ctx->ptr = ctx->buf;
+            ctx->remaining = len;
+            ctx->off += len;
+        }
+
+        ssize_t w;
+
+        while (true)
+        {
+            w = write(fd, ctx->ptr, ctx->remaining);
+
+            if (w == -1)
+            {
+                if (errno == EINTR)
+                    continue;
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    // Poll until writable again
+                    return false;
+                log_errerror("Error writing to fd %d", fd);
+                goto end;
+            }
+            assert(w != 0);
+            break;
+        }
+
+        ctx->ptr += w;
+        ctx->remaining -= w;
+    }
+
+end:
+    send_context_free(ctx);
     return true;
 }
 
@@ -406,31 +478,49 @@ wsignal_send(const char *mime_type, int fd, void *udata)
     struct state *state = udata;
 
     if (state->id == -1)
-        return;
+        goto fail;
     if (!set_fd_nonblocking(fd))
-        return;
+        goto fail;
+
+    struct send_context *ctx = malloc(sizeof(*ctx));
+
+    if (ctx == NULL)
+        goto fail;
 
     sqlite3_blob *blob = database_get_data(&state->db, state->id, mime_type);
 
     if (blob == NULL)
-        return;
+    {
+        free(ctx);
+        goto fail;
+    }
 
-    int sz = sqlite3_blob_bytes(blob);
-    int off = 0;
+    bool res = eventloop_add(
+        &state->loop, fd, EVENT_PRIORITY_NORMAL, EPOLLOUT, write_callback, ctx
+    );
 
-    void           *callback_udata[] = {state, blob, &sz, &off};
-    struct io_write ctx = {
-        .fd = fd,
-        .buf = state->buf,
-        .bufsize = sizeof(state->buf),
-        .data_callback = write_callback,
-        .callback_udata = callback_udata
-    };
+    if (!res)
+    {
+        free(ctx);
+        sqlite3_blob_close(blob);
+        goto fail;
+    }
 
-    // TODO: Maybe run this in the event loop (non-blocking)?
-    (void)io_write(&ctx, 3000);
+    ctx->fd = fd;
+    ctx->state = state;
+    ctx->blob = blob;
 
-    sqlite3_blob_close(blob);
+    ctx->ptr = ctx->buf;
+    ctx->remaining = 0;
+
+    ctx->sz = sqlite3_blob_bytes(blob);
+    ctx->off = 0;
+
+    xlist_insert_after_send(&state->send_contexes, ctx);
+
+    return;
+fail:
+    close(fd);
 }
 
 static void
@@ -1008,8 +1098,16 @@ main(int argc, char **argv)
         fflush(stdout);
     }
 
+    xlist_init_send(&state.send_contexes);
+
     ret = eventloop_run(&state.loop);
     log_info("Exiting...");
+
+    struct send_context *ctx;
+    xlist_foreach_safe(send, &state.send_contexes, ctx)
+    {
+        send_context_free(ctx);
+    }
 
 exit:
     if (sig_fd != -1)

@@ -49,7 +49,6 @@ struct wayland_signals
         void *callback_udata;
     } selection;
 
-    // Do not close fd in callback
     struct
     {
         // clang-format off
