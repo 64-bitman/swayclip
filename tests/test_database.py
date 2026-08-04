@@ -260,3 +260,23 @@ def test_pin_toggle(compositor: Compositor, daemon_runner: Callable):
 
     msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     assert msg.msg[0]["pinned"] == False
+
+def test_clear(compositor: Compositor, daemon_runner: Callable):
+    """Test that clipboard history can be cleared"""
+    compositor.add_seat("test")
+
+    daemon: Daemon = daemon_runner(compositor.display, "")
+
+    daemon.add_events(["entry_add"])
+    compositor.copy("test", Selection.REGULAR, {"a": "b"})
+    daemon.recv_event("entry_add")
+    daemon.add_events(["entry_add"])
+    compositor.copy("test", Selection.REGULAR, {"x": "y"})
+    daemon.recv_event("entry_add")
+
+    daemon.add_events(["entry_delete"])
+    assert daemon.roundtrip({"type": "delete_entry", "id": -1}).msg \
+            == {"type": "success"}
+    daemon.recv_event("entry_delete").msg["id"] == -1
+    
+

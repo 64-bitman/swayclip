@@ -846,22 +846,34 @@ request_callback(
             return;
         }
 
-        if (!database_id_exists(&state->db, id))
+        // If "id" is -1, then clear clipboard history
+        if (id == -1)
         {
-            ipc_client_send_error(
-                client, "Entry id %" PRId64 " does not exist", id
-            );
-            return;
+            if (!database_clear(&state->db))
+            {
+                ipc_client_send_error(client, IPC_DB_ERROR);
+                return;
+            }
         }
-
-        if (!database_delete_entry(&state->db, id))
+        else
         {
-            ipc_client_send_error(client, IPC_DB_ERROR);
-            return;
+            if (!database_id_exists(&state->db, id))
+            {
+                ipc_client_send_error(
+                    client, "Entry id %" PRId64 " does not exist", id
+                );
+                return;
+            }
+
+            if (!database_delete_entry(&state->db, id))
+            {
+                ipc_client_send_error(client, IPC_DB_ERROR);
+                return;
+            }
         }
 
         // If deleted entry was set as the clipboard, then clear the clipboard
-        if (id == state->id)
+        if (id == -1 || id == state->id)
         {
             // Don't want to send "entry_state" event for the now deleted
             // entry.

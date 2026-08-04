@@ -111,7 +111,8 @@ static const struct stmt_def stmt_defs[] = {
         trim,
         "DELETE FROM Entries WHERE Id IN (SELECT Id FROM Entries WHERE Pinned "
         "= 0 ORDER BY Id DESC LIMIT -1 OFFSET ?) RETURNING Id;"
-    )
+    ),
+    STMT(clear, "DELETE FROM Entries")
 };
 
 static bool
@@ -1001,4 +1002,21 @@ database_trim(struct database *db, db_trim_callback callback, void *udata)
     }
 
     return true;
+}
+
+bool
+database_clear(struct database *db)
+{
+    sqlite3_stmt *stmt = db->stmt.clear;
+
+    assert(!sqlite3_stmt_busy(stmt));
+
+    int ret = sqlite3_step(stmt);
+
+    sqlite3_reset(stmt);
+    if (ret == SQLITE_DONE)
+        return true;
+
+    log_error("Error getting clearing hisotry: %s", sqlite3_errmsg(db->handle));
+    return false;
 }

@@ -739,11 +739,12 @@ static void
 help_delete(void)
 {
     // clang-format off
-    printf("Usage: swctl delete [OPTIONS] <ID>\n");
+    printf("Usage: swctl delete [OPTIONS] [ID]\n");
     printf("\n");
     printf("Delete entry with ID from clipboard history.\n");
     printf("\n");
     printf("Options:\n");
+    printf("  -c, --clear       Clear clipboard history.\n");
     printf("  -h, --help        Show this help message.\n");
     // clang-format on
 }
@@ -752,16 +753,23 @@ static bool
 command_delete(int argc, char **argv)
 {
     static const struct option options[] = {
-        {"help", no_argument, 0, 'h'}, {NULL, 0, 0, 0}
+        {"clear", no_argument, 0, 'c'},
+        {"help", no_argument, 0, 'h'},
+        {NULL, 0, 0, 0}
     };
 
     int c;
     int idx;
 
-    while ((c = getopt_long(argc, argv, "+h", options, &idx)) != -1)
+    bool clear = false;
+
+    while ((c = getopt_long(argc, argv, "+ch", options, &idx)) != -1)
     {
         switch (c)
         {
+        case 'c':
+            clear = true;
+            break;
         case 'h':
             help_delete();
             return true;
@@ -773,10 +781,14 @@ command_delete(int argc, char **argv)
     if (!init_ipc(&ict))
         return false;
 
-    if (argv[optind] == NULL)
-        return false;
+    int64_t id = -1;
 
-    int64_t id = strtol(argv[optind], NULL, 10);
+    if (!clear)
+    {
+        if (argv[optind] == NULL)
+            return false;
+        id = strtol(argv[optind], NULL, 10);
+    }
 
     struct message resp;
 

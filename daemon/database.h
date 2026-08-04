@@ -75,6 +75,7 @@ struct database
         sqlite3_stmt *get_pinned;
 
         sqlite3_stmt *trim;
+        sqlite3_stmt *clear;
     } stmt;
 };
 
@@ -111,4 +112,5 @@ int64_t database_entry_hash_pos(struct database *db, uint8_t hash[SHA256_BLOCK_S
 bool database_update_sort_index(struct database *db, int64_t id);
 bool database_entry_is_pinned(struct database *db, int64_t id);
 bool database_trim(struct database *db, db_trim_callback callback, void *udata);
+bool database_clear(struct database *db);
 // clang-format on

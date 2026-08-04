@@ -50,9 +50,11 @@ All commands have a "--help" option, which provides a quick summary.
 	Output the contents of the mime type for the entry specified by "ID". Note
 	that the output is not modified/sanitized in any way.
 
-*delete <ID>*
+*delete [--clear] <ID>*
 	Delete the entry specified by "ID". If the clipboard was set to this entry,
-	then it will be cleared (the previous entry is not used).
+	then it will be cleared (the previous entry is not used). If "--clear" is
+	provided, then the entire clipboard history will be cleared (use with
+	caution!).
 
 *pin [--unpin] [--toggle] <ID>*
 	Pin the entry specified by "ID". A pinned entry is not trimmed from the
@@ -79,7 +81,8 @@ All commands have a "--help" option, which provides a quick summary.
 		```
 
 	*entry_delete*:
-		Emitted when an entry is deleted.
+		Emitted when an entry is deleted. If "id" -1, then history was cleared
+		(all entries deleted).
 		```
 		{
 			"event": "entry_add",

@@ -336,6 +336,10 @@ ipc_event_entry_add(struct ipc *ipc, int64_t entry_id)
     );
 }
 
+/*
+ * If -1 is passed for "entry_id", then all entries are considered to be deleted
+ * (history cleared).
+ */
 void
 ipc_event_entry_delete(struct ipc *ipc, int64_t entry_id)
 {
