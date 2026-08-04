@@ -16,7 +16,7 @@ endif
 testserver = executable(
   'testserver',
   'testserver.c',
-  c_args: ['-DWLR_USE_UNSTABLE'],
+  c_args: ['-DWLR_USE_UNSTABLE', '-UNDEBUG'],
   include_directories: [includes, include_directories('.')],
   dependencies: [server_dep, wlr_dep, json_dep, xstructs_dep]
 )
