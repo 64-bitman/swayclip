@@ -36,6 +36,8 @@ All commands have a "--help" option, which provides a quick summary.
 	swctl list | fuzzel -d --with-nth 2 | swctl set -d
 	```
 
+	Note that the JSON output may be split into several JSON individual arrays.
+
 *len*
 	Output number of entries stored in clipboard history.
 

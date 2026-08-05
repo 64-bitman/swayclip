@@ -342,47 +342,8 @@ help_list(void)
 }
 
 static bool
-command_list(int argc, char **argv)
+print_entry(int64_t start, int64_t n, bool json, bool print_empty)
 {
-    static const struct option options[] = {
-        {"json", no_argument, 0, 'j'},
-        {"start", required_argument, 0, 's'},
-        {"number", required_argument, 0, 'n'},
-        {"help", no_argument, 0, 'h'},
-        {NULL, 0, 0, 0}
-    };
-
-    int c;
-    int idx;
-
-    bool    json = false;
-    int64_t start = 0;
-    int64_t number = INT64_MAX;
-
-    while ((c = getopt_long(argc, argv, "js:n:h", options, &idx)) != -1)
-    {
-        switch (c)
-        {
-        case 'j':
-            json = true;
-            break;
-        case 's':
-            start = strtoll(optarg, NULL, 10);
-            break;
-        case 'n':
-            number = strtoll(optarg, NULL, 10);
-            break;
-        case 'h':
-            help_list();
-            return true;
-        default:
-            return false;
-        }
-    }
-
-    if (!init_ipc(&ict))
-        return false;
-
     struct message resp;
 
     CHECK(roundtrip(
@@ -391,13 +352,22 @@ command_list(int argc, char **argv)
             -1,
             JSON_STR("type", IPC_REQ_GET_HISTORY),
             JSON_INT("start", start),
-            JSON_INT("n", number),
+            JSON_INT("n", n),
             NULL
         ),
         &resp
     ));
 
     CHECK(json_object_is_type(resp.obj, json_type_array));
+
+    if (json_object_array_length(resp.obj) == 0)
+    {
+        if (print_empty && json)
+            printf("[]\n");
+        return true;
+    }
+
+    bool last = json_object_array_length(resp.obj) != (size_t)n;
 
     if (json)
     {
@@ -510,6 +480,63 @@ command_list(int argc, char **argv)
 
 exit:
     message_clear(&resp);
+
+    return last;
+}
+
+static bool
+command_list(int argc, char **argv)
+{
+    static const struct option options[] = {
+        {"json", no_argument, 0, 'j'},
+        {"start", required_argument, 0, 's'},
+        {"number", required_argument, 0, 'n'},
+        {"help", no_argument, 0, 'h'},
+        {NULL, 0, 0, 0}
+    };
+
+    int c;
+    int idx;
+
+    bool    json = false;
+    int64_t start = 0;
+    int64_t number = INT64_MAX;
+
+    while ((c = getopt_long(argc, argv, "js:n:h", options, &idx)) != -1)
+    {
+        switch (c)
+        {
+        case 'j':
+            json = true;
+            break;
+        case 's':
+            start = strtoll(optarg, NULL, 10);
+            break;
+        case 'n':
+            number = strtoll(optarg, NULL, 10);
+            break;
+        case 'h':
+            help_list();
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    if (!init_ipc(&ict))
+        return false;
+
+    bool    first = false;
+    int64_t off = start;
+    int64_t remain = number;
+
+    // Incrementally receive entries 100 at a time
+    while (remain > 0 && !print_entry(off, MIN(100, remain), json, !first))
+    {
+        first = true;
+        off += 100;
+        remain -= 100;
+    }
 
     return true;
 }
