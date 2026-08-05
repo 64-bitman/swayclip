@@ -174,7 +174,7 @@ ipc_ct_read(
             ict->pending_type = ict->buf[0];
             memcpy(&ict->pending_size, ict->buf + 1, sizeof(uint32_t));
             // Restrict message size to 64 KiB
-            if (ict->pending_size > 65536)
+            if (ict->pending_size > 52428800)
             {
                 // I guess just kill the connection?
                 log_error("IPC message size is larger than 64 KiB");
