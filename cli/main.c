@@ -162,7 +162,7 @@ read_msgs(ipc_msg_callback callback, void *udata)
     }
 
     if (pfd.revents & POLLIN)
-        if (!ipc_ct_read(&ict, true, callback, udata))
+        if (!ipc_ct_read(&ict, IPC_CT_WANT_SCM_FD, callback, udata))
             return false;
     if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
     {

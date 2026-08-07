@@ -126,18 +126,18 @@ ipc_ct_uninit(struct ipc_ct *ict)
 
 /*
  * Receive from the IPC socket, and return true on success or false on fatal
- * error. Callbacks "callback" for each message received.
+ * error. Call "callback" for each message received.
  */
 bool
 ipc_ct_read(
-    struct ipc_ct *ict, bool need_scm, ipc_msg_callback callback, void *udata
+    struct ipc_ct *ict, uint flags, ipc_msg_callback callback, void *udata
 )
 {
     while (true)
     {
         ssize_t r;
         bool    poll = false;
-        int    *scm_ptr = need_scm ? &ict->scm_fd : NULL;
+        int    *scm_ptr = (flags & IPC_CT_WANT_SCM_FD) ? &ict->scm_fd : NULL;
 
         // Subtract one because a NUL terminator may possibly be required.
         r = io_recv(
@@ -191,15 +191,17 @@ ipc_ct_read(
         if (j_err == json_tokener_success)
         {
             struct ipc_message imsg = {
-                .type = ict->pending_type,
-                .aux_data = NULL,
-                .aux_data_len = 0,
-                .payload = msg
+                .type = ict->pending_type, .payload = msg
             };
             int scm_fd = ict->scm_fd;
 
             ict->scm_fd = -1;
-            if (scm_fd != -1)
+
+            if (scm_fd != -1 && flags & IPC_CT_NO_MMAP)
+            {
+                imsg.aux_fd = scm_fd;
+            }
+            else if (scm_fd != -1 && !(flags & IPC_CT_NO_MMAP))
             {
                 struct stat st;
 
@@ -221,11 +223,32 @@ ipc_ct_read(
                     log_warn("Error querying size of IPC message fd");
                 close(scm_fd);
             }
+            else if (flags & IPC_CT_NO_MMAP)
+            {
+                imsg.aux_fd = -1;
+            }
+            else
+            {
+                imsg.aux_data = NULL;
+                imsg.aux_data_len = 0;
+            }
 
             callback(&imsg, udata);
-            json_object_put(msg);
-            if (imsg.aux_data != NULL)
-                munmap(imsg.aux_data, imsg.aux_data_len);
+
+            if (!(flags & IPC_CT_TAKE_OWNERSHIP))
+            {
+                json_object_put(msg);
+                if (flags & IPC_CT_NO_MMAP)
+                {
+                    if (imsg.aux_fd != -1)
+                        close(imsg.aux_fd);
+                }
+                else
+                {
+                    if (imsg.aux_data != NULL)
+                        munmap(imsg.aux_data, imsg.aux_data_len);
+                }
+            }
         }
         else if (j_err == json_tokener_continue)
             continue;

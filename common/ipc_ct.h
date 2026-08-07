@@ -57,8 +57,15 @@ struct ipc_message
 {
     enum ipc_message_type type;
     struct json_object   *payload;
-    void                 *aux_data; // May be NULL
-    size_t                aux_data_len;
+    union
+    {
+        struct
+        {
+            void  *aux_data; // May be NULL
+            size_t aux_data_len;
+        };
+        int aux_fd;
+    };
 };
 
 struct ipc_write
@@ -70,6 +77,11 @@ struct ipc_write
 };
 
 xarray_create(struct ipc_write, ipc_write, uint32_t, 32, 2);
+
+#define IPC_CT_WANT_SCM_FD 1 // If SCM_RIGHTS fd should be received
+#define IPC_CT_NO_MMAP 2     // Do not mmap() the SCM_RIGHTS fd
+// Have callback take ownership of struct json_object and the SCM_RIGHTS fd
+#define IPC_CT_TAKE_OWNERSHIP 4
 
 struct ipc_ct
 {
@@ -91,7 +103,7 @@ typedef void (*ipc_msg_callback)(struct ipc_message *msg, void *udata);
 char *get_ipc_path(void);
 bool ipc_ct_init(struct ipc_ct *ict, int fd);
 void ipc_ct_uninit(struct ipc_ct *ict);
-bool ipc_ct_read(struct ipc_ct *ict, bool need_scm, ipc_msg_callback callback, void *udata);
+bool ipc_ct_read(struct ipc_ct *ict, uint flags, ipc_msg_callback callback, void *udata);
 bool ipc_ct_write(struct ipc_ct *ict);
 bool ipc_ct_has_pending_writes(struct ipc_ct *ict);
 void ipc_ct_write_msg(struct ipc_ct *ict, enum ipc_message_type type, struct json_object *msg, int scm_fd);

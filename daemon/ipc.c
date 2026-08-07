@@ -63,7 +63,7 @@ client_callback(int fd, int events, void *udata)
     bool ret = true;
 
     if (events & EPOLLIN)
-        ret = ipc_ct_read(&client->ict, false, message_callback, client);
+        ret = ipc_ct_read(&client->ict, 0, message_callback, client);
     if (ret && events & EPOLLOUT)
         ret = ipc_ct_write(&client->ict);
 
