@@ -1,0 +1,29 @@
+import pytest
+import socket
+import random
+import time
+import json
+import struct
+from typing import Callable
+from conftest import Compositor
+from conftest import Daemon
+from conftest import Selection
+from conftest import cmp_entry
+from conftest import wait_cond
+
+
+def test_chunked(compositor: Compositor, daemon_runner: Callable):
+    """Test IPC server correctly handles partial header reads"""
+    compositor.add_seat("test")
+
+    daemon: Daemon = daemon_runner(compositor.display, "")
+
+    data: bytes = json.dumps({"type": "get_history_length"}).encode("utf-8")
+    header: bytes = struct.pack("=BI", 0, len(data))
+
+    daemon.sock.sendall(header[:3])
+    time.sleep(0.5)
+    daemon.sock.sendall(header[3:])
+    daemon.sock.sendall(data)
+
+    assert daemon.recv_msg().msg == {"size": 0}

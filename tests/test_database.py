@@ -210,8 +210,8 @@ def test_trim(compositor: Compositor, daemon_runner: Callable):
 
     daemon.add_events(["entry_add", "entry_delete"])
     compositor.copy("test", Selection.REGULAR, {"m": "n"})
-    assert daemon.recv_msg().msg == {'event': 'entry_add', 'id': 4}
-    assert daemon.recv_msg().msg == {'event': 'entry_delete', 'id': 2}
+    assert daemon.recv_msg().msg == {"event": "entry_add", "id": 4}
+    assert daemon.recv_msg().msg == {"event": "entry_delete", "id": 2}
     daemon.remove_events(["entry_add", "entry_delete"])
 
     msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 3})
@@ -261,6 +261,7 @@ def test_pin_toggle(compositor: Compositor, daemon_runner: Callable):
     msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     assert msg.msg[0]["pinned"] == False
 
+
 def test_clear(compositor: Compositor, daemon_runner: Callable):
     """Test that clipboard history can be cleared"""
     compositor.add_seat("test")
@@ -275,8 +276,7 @@ def test_clear(compositor: Compositor, daemon_runner: Callable):
     daemon.recv_event("entry_add")
 
     daemon.add_events(["entry_delete"])
-    assert daemon.roundtrip({"type": "delete_entry", "id": -1}).msg \
-            == {"type": "success"}
+    assert daemon.roundtrip({"type": "delete_entry", "id": -1}).msg == {
+        "type": "success"
+    }
     daemon.recv_event("entry_delete").msg["id"] == -1
-    
-

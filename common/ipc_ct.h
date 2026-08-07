@@ -75,6 +75,7 @@ struct ipc_ct
 {
     int fd;
 
+    bool                  pending_header;
     enum ipc_message_type pending_type;
     uint32_t              pending_size;
     int                   scm_fd;

@@ -1,4 +1,3 @@
-import time
 from typing import Callable
 from conftest import Compositor
 from conftest import Daemon
@@ -88,6 +87,7 @@ def test_receive_existing(compositor: Compositor, daemon_runner: Callable):
     def func():
         msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
         cmp_entry(msg.msg[0], 1, ["text/plain"], False, "text", "text/plain")
+
     wait_cond(func)
 
 

@@ -76,6 +76,13 @@ get_ipc_path(void)
     return path;
 }
 
+static void
+ipc_ct_reset(struct ipc_ct *ict)
+{
+    ict->pending_header = true;
+    ict->pending_size = HEADER_SIZE;
+}
+
 /*
  * "fd" should be non blocking
  */
@@ -87,8 +94,8 @@ ipc_ct_init(struct ipc_ct *ict, int fd)
         return false;
 
     ict->fd = fd;
-    ict->pending_size = 0;
     ict->scm_fd = -1;
+    ipc_ct_reset(ict);
 
     xarray_init_ipc_write(&ict->write_queue);
 
@@ -128,26 +135,6 @@ ipc_ct_read(
 {
     while (true)
     {
-        bool recv_header = false;
-
-        if (ict->pending_size == 0)
-        {
-            // Check if there is at minimum the header size pending in the
-            // socket buffer.
-            int pending;
-
-            if (ioctl(ict->fd, FIONREAD, &pending) == -1)
-            {
-                log_errerror("Error querying pending bytes in IPC connection");
-                return false;
-            }
-            if (pending < HEADER_SIZE)
-                return true;
-
-            recv_header = true;
-            ict->pending_size = HEADER_SIZE;
-        }
-
         ssize_t r;
         bool    poll = false;
         int    *scm_ptr = need_scm ? &ict->scm_fd : NULL;
@@ -155,7 +142,8 @@ ipc_ct_read(
         // Subtract one because a NUL terminator may possibly be required.
         r = io_recv(
             ict->fd,
-            ict->buf,
+            ict->buf +
+                (ict->pending_header ? (HEADER_SIZE - ict->pending_size) : 0),
             MIN(sizeof(ict->buf) - 1, ict->pending_size),
             scm_ptr,
             &poll
@@ -164,22 +152,24 @@ ipc_ct_read(
         if (r == -1)
             return poll;
 
-        if (recv_header)
+        if (ict->pending_header)
         {
-            if (r != HEADER_SIZE) // Shouldn't happen
-            {
-                log_error("Error reading IPC message header");
-                return false;
-            }
+            ict->pending_size -= r;
+            if (ict->pending_size > 0)
+                return true;
+
             ict->pending_type = ict->buf[0];
             memcpy(&ict->pending_size, ict->buf + 1, sizeof(uint32_t));
+
             // Restrict message size to 1 MiB
             if (ict->pending_size > 1048576)
             {
                 // I guess just kill the connection?
                 log_error("IPC message size is larger than 64 KiB");
+                ipc_ct_reset(ict); // Just to be consistent
                 return false;
             }
+            ict->pending_header = false;
             continue;
         }
 
@@ -190,6 +180,7 @@ ipc_ct_read(
             // NUL terminate the string
             ict->buf[r] = NUL;
             r++; // Include NUL in length
+            ipc_ct_reset(ict);
         }
 
         enum json_tokener_error j_err;
@@ -248,8 +239,8 @@ ipc_ct_read(
 }
 
 /*
- * Write any pending messages to the IPC socket. Return true on success and
- * false on fatal error.
+ * Write any pending messages to the IPC socket. SCM_RIGHTS fd will always be
+ * sent with the header. Return true on success and false on fatal error.
  */
 bool
 ipc_ct_write(struct ipc_ct *ict)
