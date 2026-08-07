@@ -231,7 +231,7 @@ ipc_ct_read(
             continue;
         else
             // Just reset the tokener so that message after this corrupt message
-            // isn't affect.
+            // isn't affected.
             json_tokener_reset(ict->tokener);
     }
 

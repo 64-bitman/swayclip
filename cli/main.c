@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "common/io.h"
 #include "common/ipc_ct.h"
 #include "common/json_util.h"
 #include "common/log.h"
@@ -102,6 +103,13 @@ init_ipc(struct ipc_ct *ict)
         close(fd);
         return false;
     }
+
+    if (!set_fd_nonblocking(fd))
+    {
+        close(fd);
+        return false;
+    }
+
     ict_init = true;
     return true;
 }
