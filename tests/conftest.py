@@ -208,7 +208,10 @@ class Daemon:
             ancdata: list[tuple] = [
                 (socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", scm_fd))
             ]
-            self.sock.sendmsg([packet], ancdata)
+            sent: int = self.sock.sendmsg([packet], ancdata)
+
+            if sent < len(packet):
+                self.sock.sendall(packet[sent:])
         else:
             self.sock.sendall(packet)
 
