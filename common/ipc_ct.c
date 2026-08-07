@@ -230,9 +230,14 @@ ipc_ct_read(
         else if (j_err == json_tokener_continue)
             continue;
         else
+        {
             // Just reset the tokener so that message after this corrupt message
             // isn't affected.
             json_tokener_reset(ict->tokener);
+            log_warn(
+                "Invalid IPC JSON message: %s", json_tokener_error_desc(j_err)
+            );
+        }
     }
 
     return true;
