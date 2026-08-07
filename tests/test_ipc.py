@@ -27,3 +27,21 @@ def test_chunked(compositor: Compositor, daemon_runner: Callable):
     daemon.sock.sendall(data)
 
     assert daemon.recv_msg().msg == {"size": 0}
+
+def test_bad_input(compositor: Compositor, daemon_runner: Callable):
+    """Test if daemon recovers from invalid JSON message"""
+    compositor.add_seat("test")
+
+    daemon: Daemon = daemon_runner(compositor.display, "")
+
+    data: bytes = '{"hey": 2, "}'.encode("utf-8")
+    header: bytes = struct.pack("=BI", 0, len(data))
+
+    daemon.sock.sendall(header + data)
+
+    data = json.dumps({"type": "get_history_length"}).encode("utf-8")
+    header = struct.pack("=BI", 0, len(data))
+
+    daemon.sock.sendall(header + data)
+
+    assert daemon.recv_msg().msg == {"size": 0}
