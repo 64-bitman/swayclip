@@ -62,8 +62,6 @@ client_callback(int fd, int events, void *udata)
 
     bool ret = true;
 
-    // This logic to change fd events is kinda convoluted, is there a better
-    // way?
     if (events & EPOLLIN)
         ret = ipc_ct_read(&client->ict, false, message_callback, client);
     if (ret && events & EPOLLOUT)
