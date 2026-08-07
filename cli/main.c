@@ -180,8 +180,33 @@ roundtrip(struct json_object *req, struct message *msg)
 {
     ipc_ct_write_msg(&ict, IPC_MESSAGE_CALL, req, -1);
     while (ipc_ct_has_pending_writes(&ict))
-        if (!ipc_ct_write(&ict))
+    {
+        bool need_poll = false;
+        if (!ipc_ct_write(&ict, &need_poll))
+        {
+            if (need_poll)
+            {
+                struct pollfd pfd = {.fd = ict.fd, .events = POLLOUT};
+
+                while (true)
+                {
+                    int ret = poll(&pfd, 1, -1);
+
+                    if (ret == -1)
+                    {
+                        if (errno == EINTR)
+                            continue;
+                        log_errerror("Error polling IPC connection");
+                        return false;
+                    }
+                    if (pfd.revents & POLLOUT)
+                        break;
+                }
+                continue;
+            }
             return false;
+        }
+    }
 
     memset(msg, 0, sizeof(*msg));
 

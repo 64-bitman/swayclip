@@ -65,7 +65,13 @@ client_callback(int fd, int events, void *udata)
     if (events & EPOLLIN)
         ret = ipc_ct_read(&client->ict, 0, message_callback, client);
     if (ret && events & EPOLLOUT)
-        ret = ipc_ct_write(&client->ict);
+    {
+        bool poll = false;
+
+        ret = ipc_ct_write(&client->ict, &poll);
+        if (!ret && poll)
+            ret = true;
+    }
 
     if (!ret || events & (EPOLLHUP | EPOLLERR))
         goto stop;

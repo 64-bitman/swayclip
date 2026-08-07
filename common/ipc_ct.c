@@ -268,10 +268,11 @@ ipc_ct_read(
 
 /*
  * Write any pending messages to the IPC socket. SCM_RIGHTS fd will always be
- * sent with the header. Return true on success and false on fatal error.
+ * sent with the header. Return true on success and false on fatal error (unless
+ * "*poll" is set to true).
  */
 bool
-ipc_ct_write(struct ipc_ct *ict)
+ipc_ct_write(struct ipc_ct *ict, bool *need_poll)
 {
     while (true)
     {
@@ -281,16 +282,14 @@ ipc_ct_write(struct ipc_ct *ict)
         struct ipc_write *wr = xarray_ptr_ipc_write(&ict->write_queue, 0);
 
         uint32_t off = wr->size - wr->remaining;
-        bool     poll = false;
-        ssize_t  w =
-            io_send(ict->fd, wr->data + off, wr->remaining, wr->scm_fd, &poll);
+        ssize_t  w = io_send(
+            ict->fd, wr->data + off, wr->remaining, wr->scm_fd, need_poll
+        );
 
         if (w == -1)
         {
-            if (poll)
-                // Poll until socket is writable again
-                return true;
-            log_error("Error writing to IPC connection");
+            if (!(*need_poll))
+                log_error("Error writing to IPC connection");
             return false;
         }
         if (wr->scm_fd != -1)
@@ -299,8 +298,11 @@ ipc_ct_write(struct ipc_ct *ict)
             wr->scm_fd = -1; // Don't want to send fd mutliple times
         }
         if (w == 0)
+        {
             // Not sure if this can happen, just return to poll I guess...
-            return true;
+            *need_poll = true;
+            return false;
+        }
 
         wr->remaining -= w;
 

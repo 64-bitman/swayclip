@@ -95,7 +95,7 @@ io_read(struct io_read *ctx, int timeout, size_t max_bytes)
             continue;
 
         ssize_t r = read(ctx->fd, ctx->buf, ctx->bufsize);
-        size_t total = xarray_len_io(&ctx->data) + r;
+        size_t  total = xarray_len_io(&ctx->data) + r;
 
         if (total > max_bytes || total > UINT32_MAX)
         {
@@ -140,7 +140,7 @@ fail:
  * Return number of bytes read, 0 on EOF, or -1 on fatal error.
  */
 ssize_t
-io_recv(int fd, uint8_t *buf, size_t len, int *scm_fd, bool *poll)
+io_recv(int fd, uint8_t *buf, size_t len, int *scm_fd, bool *need_poll)
 {
     bool need_scm = scm_fd != NULL && *scm_fd == -1;
 
@@ -174,7 +174,7 @@ io_recv(int fd, uint8_t *buf, size_t len, int *scm_fd, bool *poll)
                 continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                *poll = true;
+                *need_poll = true;
                 return -1;
             }
             log_errerror("Error receiving message from fd %d", fd);
@@ -208,7 +208,7 @@ io_recv(int fd, uint8_t *buf, size_t len, int *scm_fd, bool *poll)
 }
 
 ssize_t
-io_send(int fd, uint8_t *buf, size_t len, int scm_fd, bool *poll)
+io_send(int fd, uint8_t *buf, size_t len, int scm_fd, bool *need_poll)
 {
     union
     {
@@ -246,7 +246,7 @@ io_send(int fd, uint8_t *buf, size_t len, int scm_fd, bool *poll)
                 continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                *poll = true;
+                *need_poll = true;
                 return -1;
             }
             log_errerror("Error sending message to fd %d", fd);
