@@ -452,7 +452,7 @@ print_entry(int64_t start, int64_t n, bool json, bool print_empty)
         snprintf(
             aux,
             sizeof(aux),
-            "    %s%s",
+            "%s%s",
             current ? "[CURRENT] " : "",
             pinned ? "[PINNED] " : ""
         );
