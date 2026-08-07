@@ -275,8 +275,12 @@ def test_clear(compositor: Compositor, daemon_runner: Callable):
     compositor.copy("test", Selection.REGULAR, {"x": "y"})
     daemon.recv_event("entry_add")
 
+    assert daemon.roundtrip({"type": "get_history_length"}).msg == {"size": 2}
+
     daemon.add_events(["entry_delete"])
     assert daemon.roundtrip({"type": "delete_entry", "id": -1}).msg == {
         "type": "success"
     }
     daemon.recv_event("entry_delete").msg["id"] == -1
+
+    assert daemon.roundtrip({"type": "get_history_length"}).msg == {"size": 0}
