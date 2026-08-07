@@ -1,1 +1,2 @@
 leak:libfontconfig.so
+leak:libgtk-4.so
