@@ -165,7 +165,7 @@ ipc_ct_read(
             if (ict->pending_size > 1048576)
             {
                 // I guess just kill the connection?
-                log_error("IPC message size is larger than 64 KiB");
+                log_error("IPC message size is larger than 1 MiB");
                 ipc_ct_reset(ict); // Just to be consistent
                 return false;
             }
