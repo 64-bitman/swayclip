@@ -131,7 +131,6 @@ fail:
     return false;
 }
 
-
 /*
  * Receive "len" bytes from "fd" into "buf", handling EINTR. If EAGAIN or
  * EWOULDBLOCK is returned, then "poll" is set to true and -1 is returned, then

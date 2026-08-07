@@ -121,11 +121,11 @@ use KDE...
 
 </details>
 
-# Plans
+# Notes
 
-- [ ] Add a GTK4 client
-- [ ] Stabilize IPC interface, probably after GTK4 client is implemented
-- [ ] Document IPC interface when its stabilized
+The IPC protocol is currently unstable, if you update swayclip, it is
+recommended to restart the daemon and any other related processes as well.
+Sorry!
 
 # Mentions
 
