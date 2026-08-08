@@ -69,7 +69,7 @@ struct send_context
 
     uint8_t  buf[4096];
     uint8_t *ptr;       // Pointer to write from
-    int      remaining; // Remaining bytes in "buf"
+    uint32_t remaining; // Remaining bytes in "buf" (or "ptr" if transient)
 
     int sz;  // Blob size
     int off; // Offset to read from, unused if entry is transient
@@ -263,6 +263,7 @@ wsignal_selection(
     if (transient)
     {
         log_debug("Entry is transient");
+        state->id = -1;
 
         // Receive mime types transiently
         state->transient.mime_types = calloc(
@@ -297,7 +298,7 @@ wsignal_selection(
             state->transient.mime_types[i].name = strdup(mime_type);
             if (state->transient.mime_types[i].name == NULL)
             {
-                free(state->transient.mime_types[i].name);
+                xarray_uninit_io(&ctx.data);
                 clear_transient(state);
                 return;
             }
