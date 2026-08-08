@@ -36,18 +36,6 @@ struct io_read
     struct xarray_io data;
 };
 
-struct io_write
-{
-    // Set by caller
-    int      fd;
-    uint8_t *buf;
-    size_t   bufsize;
-    // clang-format off
-    bool (*data_callback)(uint8_t *buf, size_t sz, size_t *len, void *udata);
-    // clang-format on
-    void *callback_udata;
-};
-
 // clang-format off
 int64_t get_time_ns(clockid_t id);
 bool set_fd_nonblocking(int fd);
