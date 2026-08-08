@@ -11,6 +11,7 @@ swayclip_gtk = executable(
   'main.c',
   'swayclip-application.c',
   'swayclip-connection.c',
+  'swayclip-list.c',
   version_h,
   include_directories: [includes, include_directories('.')],
   dependencies: [glib_dep, gio_dep, gtk4_dep, xstructs_dep, json_dep],

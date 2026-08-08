@@ -80,7 +80,7 @@ swayclip_application_class_init(SwayclipApplicationClass *class)
 }
 
 static void
-swayclip_application_init(SwayclipApplication *self)
+swayclip_application_init(SwayclipApplication *self G_GNUC_UNUSED)
 {
 }
 

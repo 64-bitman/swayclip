@@ -375,7 +375,7 @@ swayclip_connection_request(
 )
 {
     g_assert(SWAYCLIP_IS_CONNECTION(self));
-    g_assert(obj != NULL);
+    g_return_if_fail(obj != NULL);
     g_assert(scm_fd == -1 || scm_fd > 0);
     g_assert(cancellable == NULL || G_IS_CANCELLABLE(cancellable));
 
