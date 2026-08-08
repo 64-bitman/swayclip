@@ -397,7 +397,7 @@ ipc_event_entry_update(
 }
 
 void
-ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos)
+ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos, int64_t new_pos)
 {
     if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_MOVE))
         return;
@@ -411,6 +411,7 @@ ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos)
             JSON_STR("event", IPC_EVENT_ENTRY_MOVE),
             JSON_INT("id", entry_id),
             JSON_INT("old_pos", old_pos),
+            JSON_INT("new_pos", new_pos),
             NULL
         )
     );

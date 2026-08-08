@@ -372,7 +372,7 @@ exit:
     {
         if (moved)
         {
-            ipc_event_entry_move(&state->ipc, id, old_pos);
+            ipc_event_entry_move(&state->ipc, id, old_pos, 0);
         }
         else
         {

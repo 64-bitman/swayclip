@@ -54,7 +54,7 @@ bool ipc_client_start_array(struct ipc_client *client, int len);
 void ipc_event_entry_add(struct ipc *ipc, int64_t entry_id);
 void ipc_event_entry_delete(struct ipc *ipc, int64_t entry_id);
 void ipc_event_entry_update(struct ipc *ipc, int64_t entry_id, const int64_t *update_time, const bool *pinned);
-void ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos);
+void ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos, int64_t new_pos);
 void ipc_event_entry_state(struct ipc *ipc, int64_t entry_id, bool state);
 void ipc_event_sync(struct ipc *ipc);
 void ipc_client_send(struct ipc_client *client, struct json_object *msg, int scm_fd);

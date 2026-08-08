@@ -106,14 +106,14 @@ All commands have a "--help" option, which provides a quick summary.
 		```
 	
 	*entry_move*
-		Emitted when an entry is moved to the front of the clipboard history.
-		Only relevant if "dedup" config option is set to "all", see
-		*swayclip*(5) for more information.
+		Emitted when an entry is moved. Currently only relevant if "dedup"
+		config option is set to "all", see *swayclip*(5) for more information.
 		```
 		{
 			"event": "entry_move",
 			"id": <ID>,
 			"old_pos": <int>,
+			"new_pos": <int>, // Currently can only be 0
 		}
 		```
 
