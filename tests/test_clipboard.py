@@ -95,7 +95,12 @@ def test_massive_data(compositor: Compositor, daemon_runner: Callable):
     """Test that receiving and sending a lot of data works properly"""
     compositor.add_seat("test")
 
-    daemon: Daemon = daemon_runner(compositor.display, "")
+    config = """
+    [daemon.mime_types]
+    transient = ['transient']
+    """
+
+    daemon: Daemon = daemon_runner(compositor.display, config)
 
     # See testserver.c for "massive" special case.
     daemon.add_events(["entry_add"])
@@ -109,6 +114,18 @@ def test_massive_data(compositor: Compositor, daemon_runner: Callable):
 
     compositor.copy("test", Selection.REGULAR, None)
     compositor.expect("test", Selection.REGULAR, {"test": "a" * 2000000})
+
+    # Test if sending works properly for transient entries as well (uses
+    # different logic).
+    compositor.copy("test", Selection.REGULAR, {"transient": "massive"})
+
+    def func():
+        assert daemon.roundtrip({"type": "get_current"}).msg == 0
+
+    wait_cond(func)
+
+    compositor.copy("test", Selection.REGULAR, None)
+    compositor.expect("test", Selection.REGULAR, {"transient": "a" * 2000000})
 
 
 def test_restore(compositor: Compositor, daemon_runner: Callable):
@@ -276,3 +293,27 @@ def test_no_mime_types(compositor: Compositor, daemon_runner: Callable):
     daemon.recv_event("entry_add")
 
     assert daemon.roundtrip({"type": "get_history_length"}).msg == {"size": 1}
+
+
+def test_transient(compositor: Compositor, daemon_runner: Callable):
+    """Test that transient entries work properly"""
+    compositor.add_seat("test")
+
+    config = """
+    [daemon.mime_types]
+    transient = ['transient']
+    """
+
+    daemon: Daemon = daemon_runner(compositor.display, config)
+
+    compositor.copy("test2", Selection.REGULAR, {"allowed": "1", "transient": "2"})
+
+    def func():
+        assert daemon.roundtrip({"type": "get_current"}).msg == 0
+
+    wait_cond(func)
+
+    compositor.copy("test", Selection.REGULAR, None)
+
+    compositor.expect("test2", Selection.REGULAR, {"allowed": "1", "transient": "2"})
+    assert daemon.roundtrip({"type": "get_history_length"}).msg == {"size": 0}

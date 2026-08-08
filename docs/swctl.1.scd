@@ -65,7 +65,8 @@ All commands have a "--help" option, which provides a quick summary.
 
 *current*
 	Output ID of entry that clipboard is set to. If the clipboard is cleared,
-	then -1 is outputted.
+	then -1 is outputted. If the current entry is transient, then 0 is
+	outputted, see *swayclip*(5) for more information.
 
 *events <events>*
 	Output a JSON stream of events from the daemon. "events" is a list of events

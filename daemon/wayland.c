@@ -56,6 +56,7 @@ struct seat
 
     struct xarray_mime_type mime_types;
     bool                    blocked;
+    bool                    transient;
 
     struct xlist_seat link;
 };
@@ -216,6 +217,10 @@ data_offer_event_offer(
     if (seat->blocked)
         return;
 
+    if (!seat->transient &&
+        match_regex_array(&config->transient_mime_types, mime_type))
+        seat->transient = true;
+
     // Check if mime type is allowed to be saved
     if (xarray_len_regex(&config->allowed_mime_types) > 0 &&
         !match_regex_array(&config->allowed_mime_types, mime_type))
@@ -251,6 +256,7 @@ data_device_event_data_offer(
 
     seat_clear_mime_types(seat);
     seat->blocked = false;
+    seat->transient = false;
 
     ext_data_control_offer_v1_add_listener(
         offer_proxy, &data_offer_listener, seat
@@ -377,7 +383,11 @@ selection_event(
     }
 
     signals->selection.callback(
-        sel, offer, &seat->mime_types, signals->selection.callback_udata
+        sel,
+        offer,
+        &seat->mime_types,
+        seat->transient,
+        signals->selection.callback_udata
     );
     seat_clear_mime_types(seat);
 }

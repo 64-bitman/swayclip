@@ -181,6 +181,11 @@ config_init(struct config *config, const char *file)
             "daemon.mime_types.blocked",
             &config->blocked_mime_types,
             extract_pattern_array
+        ),
+        CONFIG_ARRAY(
+            "daemon.mime_types.transient",
+            &config->transient_mime_types,
+            extract_pattern_array
         )
     };
 
@@ -213,6 +218,9 @@ config_uninit(struct config *config)
 
     xarray_foreach(regex, &config->blocked_mime_types, reg) regfree(reg);
     xarray_uninit_regex(&config->blocked_mime_types);
+
+    xarray_foreach(regex, &config->transient_mime_types, reg) regfree(reg);
+    xarray_uninit_regex(&config->transient_mime_types);
 
     free(config->logfile);
     free(config->db);

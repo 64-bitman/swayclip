@@ -44,7 +44,7 @@ struct wayland_signals
     struct
     {
         // clang-format off
-        void (*callback)(struct selection *sel, struct ext_data_control_offer_v1 *offer, struct xarray_mime_type *mime_types, void *udata);
+        void (*callback)(struct selection *sel, struct ext_data_control_offer_v1 *offer, struct xarray_mime_type *mime_types, bool transient, void *udata);
         // clang-format on
         void *callback_udata;
     } selection;

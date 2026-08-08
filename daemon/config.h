@@ -79,6 +79,11 @@ struct config
     // Array of regex_t of mime types that will make the selection event be
     // completely ignored.
     struct xarray_regex blocked_mime_types;
+
+    // Array of regex_t of mime types that will make the selection event be
+    // stored, but not in the database, instead fully in memory always. This
+    // allows it to persist when client exits.
+    struct xarray_regex transient_mime_types;
 };
 
 // clang-format off

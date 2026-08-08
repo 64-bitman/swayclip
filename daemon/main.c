@@ -65,14 +65,14 @@ struct send_context
 {
     int           fd;
     struct state *state;
-    sqlite3_blob *blob;
+    sqlite3_blob *blob; // If NULL then entry is transient
 
     uint8_t  buf[4096];
     uint8_t *ptr;       // Pointer to write from
     int      remaining; // Remaining bytes in "buf"
 
     int sz;  // Blob size
-    int off; // Offset to read from
+    int off; // Offset to read from, unused if entry is transient
 
     struct xlist_send link;
 };
@@ -91,11 +91,24 @@ struct state
     uint8_t buf[4096]; // Used for I/O operations
 
     // ID of current entry that all enabled selections are synced to. -1 if no
-    // entry set, or if "cleared" is true, then clipboard is cleared.
+    // entry set, or if "cleared" is true, then clipboard is cleared. If 0, then
+    // the current entry is transient.
     int64_t id;
     bool    cleared;
 
-    struct xlist_send send_contexes;
+    struct xlist_send send_contexts;
+
+    // Contains data for transient entry
+    struct
+    {
+        struct
+        {
+            char    *name;
+            uint8_t *data;
+            uint32_t sz;
+        }       *mime_types;
+        uint32_t n_mime_types;
+    } transient;
 };
 
 static bool
@@ -139,19 +152,20 @@ update(struct state *state, int64_t id, const bool *pinned)
 static void
 set(struct state *state, struct selection *ignore, int64_t id)
 {
-    if (state->id != -1)
+    if (state->id > 0)
         ipc_event_entry_state(&state->ipc, state->id, false);
 
     state->id = id;
     if (state->id == -1)
         state->cleared = true;
 
-    (void)database_save_setting(
-        &state->db, DB_SETTING_LAST_ENTRY, 'i', state->id
-    );
+    if (state->id > 0)
+        (void)database_save_setting(
+            &state->db, DB_SETTING_LAST_ENTRY, 'i', state->id
+        );
     wayland_set(&state->wayland, ignore);
 
-    if (state->id != -1)
+    if (state->id > 0)
         ipc_event_entry_state(&state->ipc, state->id, true);
 }
 
@@ -185,10 +199,54 @@ trim_callback(int64_t id, void *udata)
 }
 
 static void
+clear_transient(struct state *state)
+{
+    for (uint32_t i = 0; i < state->transient.n_mime_types; i++)
+    {
+        free(state->transient.mime_types[i].name);
+        free(state->transient.mime_types[i].data);
+    }
+    free(state->transient.mime_types);
+    state->transient.mime_types = NULL;
+    state->transient.n_mime_types = 0;
+}
+
+static bool
+receive_data(
+    struct state                     *state,
+    struct io_read                   *ctx,
+    struct ext_data_control_offer_v1 *offer,
+    char                             *mime_type
+)
+{
+    int fd = wayland_get_offer_fd(&state->wayland, offer, mime_type);
+
+    if (fd == -1)
+        return false;
+
+    if (!set_fd_nonblocking(fd))
+    {
+        close(fd);
+        return false;
+    }
+
+    ctx->fd = fd;
+    if (!io_read(ctx, 3000, state->config.max_size))
+    {
+        close(fd);
+        return false;
+    }
+    close(fd);
+
+    return true;
+}
+
+static void
 wsignal_selection(
     struct selection                 *sel,
     struct ext_data_control_offer_v1 *offer,
     struct xarray_mime_type          *mime_types,
+    bool                              transient,
     void                             *udata
 )
 {
@@ -197,6 +255,60 @@ wsignal_selection(
     if (xarray_len_mime_type(mime_types) == 0)
     {
         log_debug("Selection event has no allowed mime types, ignoring");
+        return;
+    }
+
+    clear_transient(state);
+
+    if (transient)
+    {
+        log_debug("Entry is transient");
+
+        // Receive mime types transiently
+        state->transient.mime_types = calloc(
+            xarray_len_mime_type(mime_types),
+            sizeof(*state->transient.mime_types)
+        );
+
+        if (state->transient.mime_types == NULL)
+        {
+            log_errerror("Error allocating array for transient entry");
+            return;
+        }
+        state->transient.n_mime_types = xarray_len_mime_type(mime_types);
+
+        char    *mime_type;
+        uint32_t i = 0;
+
+        xarray_foreach_val(mime_type, mime_types, mime_type)
+        {
+            struct io_read ctx = {
+                .buf = state->buf,
+                .bufsize = sizeof(state->buf),
+                .data_callback = NULL
+            };
+
+            if (!receive_data(state, &ctx, offer, mime_type))
+            {
+                clear_transient(state);
+                return;
+            }
+
+            state->transient.mime_types[i].name = strdup(mime_type);
+            if (state->transient.mime_types[i].name == NULL)
+            {
+                free(state->transient.mime_types[i].name);
+                clear_transient(state);
+                return;
+            }
+
+            state->transient.mime_types[i].data =
+                xarray_steal_io(&ctx.data, &state->transient.mime_types[i].sz);
+            i++;
+        }
+
+        set(state, sel, 0);
+
         return;
     }
 
@@ -226,33 +338,19 @@ wsignal_selection(
     // filtering of mime types is done in wayland.c
     xarray_foreach_val(mime_type, mime_types, mime_type)
     {
-        int fd = wayland_get_offer_fd(&state->wayland, offer, mime_type);
-
-        if (fd == -1)
-            goto exit;
-
-        if (!set_fd_nonblocking(fd))
-            goto exit;
-
         SHA256_CTX data_sha_ctx;
 
         sha256_init(&data_sha_ctx);
 
         struct io_read ctx = {
-            .fd = fd,
             .buf = state->buf,
             .bufsize = sizeof(state->buf),
             .data_callback = read_callback,
             .callback_udata = &data_sha_ctx,
         };
 
-        if (!io_read(&ctx, 3000, state->config.max_size))
-        {
-            close(fd);
+        if (!receive_data(state, &ctx, offer, mime_type))
             goto exit;
-        }
-
-        close(fd);
 
         struct xarray_io *data = &ctx.data;
 
@@ -406,7 +504,8 @@ send_context_free(struct send_context *ctx)
 {
     (void)eventloop_del(&ctx->state->loop, ctx->fd);
     close(ctx->fd);
-    sqlite3_blob_close(ctx->blob);
+    if (ctx->blob != NULL)
+        sqlite3_blob_close(ctx->blob);
     xlist_unlink_send(ctx);
     free(ctx);
 }
@@ -422,7 +521,7 @@ write_callback(int fd, int events, void *udata)
     // Keep writing until we get EAGAIN or EWOULDBLOCK
     while (true)
     {
-        if (ctx->remaining == 0)
+        if (ctx->blob != NULL && ctx->remaining == 0)
         {
             int len = MIN((size_t)ctx->sz - ctx->off, sizeof(ctx->buf));
 
@@ -465,6 +564,8 @@ write_callback(int fd, int events, void *udata)
 
         ctx->ptr += w;
         ctx->remaining -= w;
+        if (ctx->blob == NULL && ctx->remaining == 0)
+            goto end;
     }
 
 end:
@@ -487,12 +588,51 @@ wsignal_send(const char *mime_type, int fd, void *udata)
     if (ctx == NULL)
         goto fail;
 
-    sqlite3_blob *blob = database_get_data(&state->db, state->id, mime_type);
+    sqlite3_blob *blob = NULL;
+
+    if (state->id > 0)
+    {
+        blob = database_get_data(&state->db, state->id, mime_type);
+
+        if (blob == NULL)
+        {
+            free(ctx);
+            goto fail;
+        }
+    }
+
+    ctx->fd = fd;
+    ctx->state = state;
+    ctx->blob = blob;
 
     if (blob == NULL)
     {
-        free(ctx);
-        goto fail;
+        // Not sure if this can happen but still check
+        if (state->transient.n_mime_types == 0)
+            goto fail;
+
+        ctx->ptr = NULL;
+
+        for (uint32_t i = 0; i < state->transient.n_mime_types; i++)
+            if (strcmp(state->transient.mime_types[i].name, mime_type) == 0)
+            {
+                ctx->remaining = state->transient.mime_types[i].sz;
+                ctx->ptr = state->transient.mime_types[i].data;
+                break;
+            }
+
+        if (ctx->ptr == NULL)
+        {
+            free(ctx);
+            goto fail;
+        }
+    }
+    else
+    {
+        ctx->ptr = ctx->buf;
+        ctx->remaining = 0;
+        ctx->sz = sqlite3_blob_bytes(blob);
+        ctx->off = 0;
     }
 
     bool res = eventloop_add(
@@ -502,21 +642,12 @@ wsignal_send(const char *mime_type, int fd, void *udata)
     if (!res)
     {
         free(ctx);
-        sqlite3_blob_close(blob);
+        if (blob != NULL)
+            sqlite3_blob_close(blob);
         goto fail;
     }
 
-    ctx->fd = fd;
-    ctx->state = state;
-    ctx->blob = blob;
-
-    ctx->ptr = ctx->buf;
-    ctx->remaining = 0;
-
-    ctx->sz = sqlite3_blob_bytes(blob);
-    ctx->off = 0;
-
-    xlist_insert_after_send(&state->send_contexes, ctx);
+    xlist_insert_after_send(&state->send_contexts, ctx);
 
     return;
 fail:
@@ -538,12 +669,21 @@ wsignal_set(struct ext_data_control_manager_v1 *mgr, bool *clear, void *udata)
 
     struct ext_data_control_source_v1 *source = NULL;
 
-    if (state->id != -1)
+    if (state->id >= 0)
     {
         source = ext_data_control_manager_v1_create_data_source(mgr);
-        (void)database_get_mime_types(
-            &state->db, state->id, send_mime_type_callback, source
-        );
+        if (state->id == 0)
+        {
+            // Transient entry, directly add the mime types
+            for (uint32_t i = 0; i < state->transient.n_mime_types; i++)
+                ext_data_control_source_v1_offer(
+                    source, state->transient.mime_types[i].name
+                );
+        }
+        else
+            (void)database_get_mime_types(
+                &state->db, state->id, send_mime_type_callback, source
+            );
     }
     else if (state->cleared)
         *clear = true;
@@ -1110,16 +1250,18 @@ main(int argc, char **argv)
         fflush(stdout);
     }
 
-    xlist_init_send(&state.send_contexes);
+    xlist_init_send(&state.send_contexts);
 
     ret = eventloop_run(&state.loop);
     log_info("Exiting...");
 
     struct send_context *ctx;
-    xlist_foreach_safe(send, &state.send_contexes, ctx)
+    xlist_foreach_safe(send, &state.send_contexts, ctx)
     {
         send_context_free(ctx);
     }
+
+    clear_transient(&state);
 
 exit:
     if (sig_fd != -1)

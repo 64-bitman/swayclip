@@ -111,6 +111,16 @@ These options go under a *"mime_types"* section, which itself lives inside the
 	Useful for things like passwords, which some apps mark in a special way so
 	you can exclude them.
 
+*transient = [array of regular expressions]*
+	Works the same way as "blocked" above, but instead if there is any match, a
+	"transient" entry is created instead. A transient entry will always be
+	stored in memory separately from the database. However, it will persist
+	across clipboard clears and when the source client exits. A transient entry
+	will always be represented by an ID of zero.
+
+	Note that transient mime types are matched before checking "allowed" option.
+	This means you can match a transient mime type without storing it.
+
 These options go under a *"seats"* section, which also lives inside the
 *"daemon"* section. Most users can skip this entirely, it's only useful if you
 have more than one "seat" (see the Terminology section above) and want different

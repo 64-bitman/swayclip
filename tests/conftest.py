@@ -60,7 +60,7 @@ class Compositor:
             )
         assert self._read_msg() == "OK"
 
-    def pastex(self, seat: str, sel: Selection) -> dict[str, str] | None:
+    def paste(self, seat: str, sel: Selection) -> dict[str, str] | None:
         """Paste current clipboard contents, or None if clipboard is cleared"""
         self._write_msg(
             {
@@ -78,7 +78,7 @@ class Compositor:
         """Expect clipboard contents to be "expected" """
 
         def func():
-            assert self.pastex(seat, sel) == expect
+            assert self.paste(seat, sel) == expect
 
         wait_cond(func)
 

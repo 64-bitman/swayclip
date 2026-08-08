@@ -118,7 +118,8 @@ io_read(struct io_read *ctx, int timeout, size_t max_bytes)
                 log_errerror("Out of memory!");
                 goto fail;
             }
-            ctx->data_callback(ctx->buf, r, ctx->callback_udata);
+            if (ctx->data_callback != NULL)
+                ctx->data_callback(ctx->buf, r, ctx->callback_udata);
         }
         else
             // EOF received
