@@ -74,6 +74,22 @@ class Compositor:
 
         return ret
 
+    def set_toplevel(self, id: str, title: str | None, app_id: str | None) -> None:
+        args = {"cmd": "set_toplevel", "id": id}
+
+        if title is not None:
+            args["title"] = title
+        if app_id is not None:
+            args["app_id"] = app_id
+
+        self._write_msg(args)
+
+    def del_toplevel(self, id: str) -> None:
+        self._write_msg({"cmd": "del_toplevel", "id": id})
+
+    def activate_toplevel(self, id: str, activate: bool) -> None:
+        self._write_msg({"cmd": "activate_toplevel", "id": id, "state": activate})
+
     def expect(self, seat: str, sel: Selection, expect: dict[str, str] | None) -> None:
         """Expect clipboard contents to be "expected" """
 

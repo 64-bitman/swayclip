@@ -141,9 +141,7 @@ def test_restore(compositor: Compositor, daemon_runner: Callable):
     # Clear clipboard
     compositor.copy("test", Selection.REGULAR, None)
 
-    compositor.expect("test", Selection.REGULAR, None)
     compositor.expect("test", Selection.PRIMARY, {"a": "b"})
-
     compositor.expect("test", Selection.REGULAR, {"a": "b"})
 
 

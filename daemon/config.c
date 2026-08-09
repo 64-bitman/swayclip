@@ -137,6 +137,69 @@ extract_dedup(const char *key UNUSED, toml_datum_t dat, void *store)
     return true;
 }
 
+static bool
+extract_toplevel(const char *key UNUSED, toml_datum_t dat, void *store)
+{
+    struct xarray_config_toplevel *arr = store;
+
+    if (dat.u.arr.size == 0)
+        return true;
+
+    if (!xarray_set_size_config_toplevel(arr, dat.u.tab.size))
+    {
+        log_errerror("Error allocating array for \"%s\"", key);
+        return false;
+    }
+
+    for (int32_t i = 0; i < dat.u.arr.size; i++)
+    {
+        toml_datum_t t_toplevel = dat.u.arr.elem[i];
+
+        if (t_toplevel.type != TOML_TABLE)
+        {
+            log_error(
+                "Expected table for toplevel in \"%s[%d]\" in config", key, i
+            );
+            return false;
+        }
+
+        struct config_toplevel tp = {0};
+
+        xarray_init_regex(&tp.titles);
+        xarray_init_regex(&tp.app_ids);
+        xarray_init_regex(&tp.allowed_mime_types);
+        xarray_init_regex(&tp.blocked_mime_types);
+        xarray_init_regex(&tp.transient_mime_types);
+
+        const struct config_option opts[] = {
+            CONFIG_ARRAY("titles", &tp.titles, extract_pattern_array),
+            CONFIG_ARRAY("app_ids", &tp.app_ids, extract_pattern_array),
+            CONFIG_ARRAY(
+                "allowed_mime_types",
+                &tp.allowed_mime_types,
+                extract_pattern_array
+            ),
+            CONFIG_ARRAY(
+                "blocked_mime_types",
+                &tp.blocked_mime_types,
+                extract_pattern_array
+            ),
+            CONFIG_ARRAY(
+                "transient_mime_types",
+                &tp.transient_mime_types,
+                extract_pattern_array
+            ),
+        };
+
+        if (!config_extract(t_toplevel, opts, N_ELEMENTS(opts)))
+            return false;
+
+        xarray_add_config_toplevel(arr, tp);
+    }
+
+    return true;
+}
+
 bool
 config_init(struct config *config, const char *file)
 {
@@ -158,6 +221,7 @@ config_init(struct config *config, const char *file)
     };
 
     xarray_init_config_seat(&config->configured_seats);
+    xarray_init_config_toplevel(&config->configured_toplevels);
     xarray_init_regex(&config->allowed_mime_types);
     xarray_init_regex(&config->blocked_mime_types);
     xarray_init_regex(&config->transient_mime_types);
@@ -187,7 +251,10 @@ config_init(struct config *config, const char *file)
             "daemon.mime_types.transient",
             &config->transient_mime_types,
             extract_pattern_array
-        )
+        ),
+        CONFIG_ARRAY(
+            "daemon.toplevels", &config->configured_toplevels, extract_toplevel
+        ),
     };
 
     bool ret = config_extract(result.toptab, opts, N_ELEMENTS(opts));
@@ -211,6 +278,34 @@ config_uninit(struct config *config)
     xarray_foreach(config_seat, &config->configured_seats, config_seat)
         free(config_seat->name);
     xarray_uninit_config_seat(&config->configured_seats);
+
+    struct config_toplevel *config_toplevel;
+
+    xarray_foreach(
+        config_toplevel, &config->configured_toplevels, config_toplevel
+    )
+    {
+        regex_t *reg;
+
+        xarray_foreach(regex, &config_toplevel->titles, reg) regfree(reg);
+        xarray_uninit_regex(&config_toplevel->titles);
+
+        xarray_foreach(regex, &config_toplevel->app_ids, reg) regfree(reg);
+        xarray_uninit_regex(&config_toplevel->app_ids);
+
+        xarray_foreach(regex, &config_toplevel->allowed_mime_types, reg)
+            regfree(reg);
+        xarray_uninit_regex(&config_toplevel->allowed_mime_types);
+
+        xarray_foreach(regex, &config_toplevel->blocked_mime_types, reg)
+            regfree(reg);
+        xarray_uninit_regex(&config_toplevel->blocked_mime_types);
+
+        xarray_foreach(regex, &config_toplevel->transient_mime_types, reg)
+            regfree(reg);
+        xarray_uninit_regex(&config_toplevel->transient_mime_types);
+    }
+    xarray_uninit_config_toplevel(&config->configured_toplevels);
 
     regex_t *reg;
 

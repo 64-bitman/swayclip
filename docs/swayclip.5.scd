@@ -121,6 +121,47 @@ These options go under a *"mime_types"* section, which itself lives inside the
 	Note that transient mime types are matched before checking "allowed" option.
 	This means you can match a transient mime type without storing it.
 
+These options go under a *"toplevels"* section, which also lives inside the
+*"daemon"* section. It is an array of tables, each representing a toplevel
+(which may be known as a window) to match.
+
+*titles = [array of regular expressions]*
+	A list of patterns (POSIX regular expressions) matching the "title"
+	property of a toplevel. At least one pattern must match. If this is not
+	provided or is empty, then all titles are matched.
+
+*app_ids = [array of regular expressions]*
+	Similar to "titles", but matches the "app_id" of a toplevel.
+
+*allowed_mime_types = [array of regular expressions]*++
+*blocked_mime_types = [array of regular expressions]*++
+*transient_mime_types = [array of regular expressions]*
+	These function the same as their global counterparts (see
+	"daemon.mime_types"). However they only apply when the matched toplevel is
+	active. The global mime type filter is processed before any toplevel ones.
+
+swayclip can detect the currently active toplevel, and vary behaviour depending
+on its configuration. This requires the compositor to support the
+wlr-foreign-toplevel-management-v1 protocol. If the protocol is not detected,
+then this feature will not work (however swayclip will still run fine).
+
+A toplevel is matched if at least one pattern in "titles" and "app_ids" match.
+If either array is not provided or is empty, then it is assumed to match all. An
+active toplevel can be thought of as the currently "focused" window, which may
+copy things to the clipboard.
+
+This allows you to adjust behaviour for graphical applications that do not emit
+any special/specific mime type. However this is not perfect, for example
+terminal applications such as "wl-copy" cannot be detected, because they have no
+toplevel. Instead the terminal application that the "wl-copy" was run in is the
+toplevel that should be matched.
+
+This feature assumes that the selection event came from the application of the
+currently active toplevel. If there are more than one active toplevel, then
+swayclip will only pick one to assume as the "active toplevel". However most
+Wayland compositors generally do not allow more than one active toplevel, so
+you likely do not have to worry about this.
+
 These options go under a *"seats"* section, which also lives inside the
 *"daemon"* section. Most users can skip this entirely, it's only useful if you
 have more than one "seat" (see the Terminology section above) and want different
@@ -139,7 +180,7 @@ clipboard behavior for each one.
 		If not set, it uses whatever "daemon.primary" is set to.
 
 If you don't include a "seats" section at all, swayclip will just track the
-clipboard for every seat automatically, which is what most users want.
+clipboard for every seat automatically, which is what you likely want.
 
 # EXAMPLE
 
@@ -151,10 +192,11 @@ regular = true
 primary = false
 
 [daemon.mime_types]
-allowed = ["text/.+", "image/.+"]
+# The "^" at the beginning is important if you want to only match at the start!
+allowed = ["^text/.+", "^image/.+"]
 
 # Some password managers set this mime type
-blocked = ["x-kde-passwordManagerHint"]
+transient = ["^x-kde-passwordManagerHint"]
 
 [daemon.seats."seat0"]
 regular = true

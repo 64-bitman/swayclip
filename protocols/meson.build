@@ -4,7 +4,7 @@ if not wayland_scanner.found()
   subdir_done()
 endif
 
-daemon_protocols = ['ext-data-control-v1']
+daemon_protocols = ['ext-data-control-v1', 'wlr-foreign-toplevel-management-unstable-v1']
 daemon_proto_libs = []
 
 foreach name : daemon_protocols

@@ -12,6 +12,7 @@
 #include <wlr/backend/headless.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_ext_data_control_v1.h>
+#include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/log.h>
@@ -27,12 +28,27 @@ struct seat
 };
 xarray_create(struct seat *, seat, uint32_t, 2, 1.5);
 
+struct toplevel
+{
+    char *id; // Unique ID given by user
+
+    struct wlr_foreign_toplevel_handle_v1 *handle;
+
+    struct wl_listener destroy;
+};
+xarray_create(struct toplevel *, toplevel, uint32_t, 2, 1.5);
+
 static struct wl_display  *display;
 static struct wlr_backend *backend;
 
-static struct xarray_seat seats;
+static struct xarray_seat     seats;
+static struct xarray_toplevel toplevels;
+
+struct toplevel *active_toplevel;
 
 static struct wlr_ext_data_control_manager_v1 *ext_data_mgr;
+
+static struct wlr_foreign_toplevel_manager_v1 *ftp_mgr;
 
 static int
 signal_handler(int signo UNUSED, void *udata UNUSED)
@@ -152,6 +168,16 @@ handle_seat_destroy(struct wl_listener *listener, void *data UNUSED)
     free(seat);
 }
 
+static void
+handle_toplevel_destroy(struct wl_listener *listener, void *data UNUSED)
+{
+    struct toplevel *tp = wl_container_of(listener, tp, destroy);
+
+    wl_list_remove(&tp->destroy.link);
+    free(tp->id);
+    free(tp);
+}
+
 static bool
 execute_command(struct json_object *obj)
 {
@@ -188,6 +214,7 @@ execute_command(struct json_object *obj)
         wl_signal_add(&seat->seat->events.destroy, &seat->destroy);
 
         xarray_add_seat(&seats, seat);
+        wl_display_flush_clients(display);
         printf("\"OK\"\n");
     }
     // Delete seat
@@ -207,6 +234,7 @@ stop:
 
         assert(seat != NULL);
         wlr_seat_destroy(seat->seat);
+        wl_display_flush_clients(display);
         printf("\"OK\"\n");
     }
     else if (
@@ -307,6 +335,7 @@ stop2:
                     (struct wlr_primary_selection_source *)source,
                     serial
                 );
+            wl_display_flush_clients(display);
             printf("\"OK\"\n");
         }
         // Get contents of mime type for given seat and selection. return JSON
@@ -404,8 +433,79 @@ stop2:
                 wlr_seat_set_selection(seat->seat, NULL, serial);
             else
                 wlr_seat_set_primary_selection(seat->seat, NULL, serial);
+            wl_display_flush_clients(display);
             printf("\"OK\"\n");
         }
+    }
+    else if (
+        strcmp(cmd, "set_toplevel") == 0 || strcmp(cmd, "del_toplevel") == 0 ||
+        strcmp(cmd, "activate_toplevel") == 0
+    )
+    {
+        const char *id =
+            json_object_get_string(json_object_object_get(obj, "id"));
+
+        // Check if there is an existing toplevel
+        struct toplevel *tp = NULL;
+
+        xarray_foreach_val(toplevel, &toplevels, tp)
+        {
+            if (strcmp(tp->id, id) == 0)
+                goto stop3;
+        }
+
+stop3:
+        if (strcmp(cmd, "set_toplevel") == 0)
+        {
+            const char *title =
+                json_object_get_string(json_object_object_get(obj, "title"));
+            const char *app_id =
+                json_object_get_string(json_object_object_get(obj, "app_id"));
+
+            if (tp == NULL)
+            {
+                tp = calloc(1, sizeof(*tp));
+                assert(tp != NULL);
+
+                tp->id = strdup(id);
+                assert(tp->id != NULL);
+
+                tp->handle = wlr_foreign_toplevel_handle_v1_create(ftp_mgr);
+
+                tp->destroy.notify = handle_toplevel_destroy;
+                wl_signal_add(&tp->handle->events.destroy, &tp->destroy);
+
+                xarray_add_toplevel(&toplevels, tp);
+            }
+
+            if (title != NULL)
+                wlr_foreign_toplevel_handle_v1_set_title(tp->handle, title);
+            if (app_id != NULL)
+                wlr_foreign_toplevel_handle_v1_set_app_id(tp->handle, app_id);
+        }
+        else if (strcmp(cmd, "del_toplevel") == 0)
+        {
+            assert(tp != NULL);
+            wlr_foreign_toplevel_handle_v1_destroy(tp->handle);
+        }
+        else if (strcmp(cmd, "activate_toplevel") == 0)
+        {
+            assert(tp != NULL);
+
+            bool activate =
+                json_object_get_boolean(json_object_object_get(obj, "state"));
+
+            if (active_toplevel != NULL)
+                wlr_foreign_toplevel_handle_v1_set_activated(
+                    active_toplevel->handle, false
+                );
+
+            wlr_foreign_toplevel_handle_v1_set_activated(tp->handle, activate);
+            active_toplevel = tp;
+        }
+
+        wl_display_flush_clients(display);
+        printf("\"OK\"\n");
     }
 
     return true;
@@ -508,6 +608,7 @@ main(int argc, char **argv)
     assert(backend != NULL);
 
     ext_data_mgr = wlr_ext_data_control_manager_v1_create(display, 1);
+    ftp_mgr = wlr_foreign_toplevel_manager_v1_create(display);
 
     assert(wl_display_add_socket(display, display_name) != -1);
     free(display_name);
@@ -524,6 +625,7 @@ main(int argc, char **argv)
     );
 
     xarray_init_seat(&seats);
+    xarray_init_toplevel(&toplevels);
 
     printf("Ready\n");
     wl_display_run(display);

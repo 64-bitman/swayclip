@@ -33,6 +33,18 @@ struct config_seat
 };
 xarray_create(struct config_seat, config_seat, uint32_t, 4, 1.5);
 
+struct config_toplevel
+{
+    struct xarray_regex titles;
+    struct xarray_regex app_ids;
+
+    // Same as the global counterparts, but for this specific toplevel.
+    struct xarray_regex allowed_mime_types;
+    struct xarray_regex blocked_mime_types;
+    struct xarray_regex transient_mime_types;
+};
+xarray_create(struct config_toplevel, config_toplevel, uint32_t, 4, 1.5);
+
 enum config_dedup
 {
     DEDUP_NONE,
@@ -84,6 +96,8 @@ struct config
     // stored, but not in the database, instead fully in memory always. This
     // allows it to persist when client exits.
     struct xarray_regex transient_mime_types;
+
+    struct xarray_config_toplevel configured_toplevels;
 };
 
 // clang-format off

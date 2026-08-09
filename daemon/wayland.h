@@ -22,6 +22,7 @@
 #include "common/wayland_ct.h"
 #include "config.h"
 #include "protocols/ext-data-control-v1.h"
+#include "protocols/wlr-foreign-toplevel-management-unstable-v1.h"
 #include "xarray.h"
 #include "xlist.h"
 #include <wayland-client.h>
@@ -35,6 +36,7 @@ enum wayland_selection_type
 struct wayland;
 struct seat;
 struct selection;
+struct toplevel;
 
 xarray_create(char *, mime_type, uint32_t, 10, 2);
 
@@ -77,14 +79,21 @@ struct wayland_signals
 };
 
 xlist_declare(seat);
+xlist_declare(toplevel);
 
 struct wayland
 {
     struct wayland_ct wct;
     struct config    *config;
 
-    struct ext_data_control_manager_v1 *ext_data_mgr;
-    struct xlist_seat                   seats;
+    struct ext_data_control_manager_v1      *ext_data_mgr;
+    struct zwlr_foreign_toplevel_manager_v1 *ftp_mgr; // May be NULL
+
+    struct xlist_seat     seats;
+    struct xlist_toplevel toplevels;
+
+    // Toplevel that is currently active, or NULL if none
+    struct toplevel *active_toplevel;
 
     struct wayland_signals signals;
 };

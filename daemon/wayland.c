@@ -62,6 +62,23 @@ struct seat
 };
 xlist_define(seat, struct seat, link);
 
+struct toplevel
+{
+    struct wayland *wayland;
+
+    struct zwlr_foreign_toplevel_handle_v1 *proxy;
+
+    char *app_id; // May be NULL
+    char *title;  // May be NULL
+    bool  activated;
+
+    struct config_toplevel *config;
+    bool                    ack;
+
+    struct xlist_toplevel link;
+};
+xlist_define(toplevel, struct toplevel, link);
+
 static void wayland_del_seat(struct seat *seat);
 
 static void
@@ -196,6 +213,35 @@ match_regex_array(struct xarray_regex *arr, const char *target)
     return false;
 }
 
+static bool
+seat_check_mime_type(
+    struct seat         *seat,
+    const char          *mime_type,
+    struct xarray_regex *blocked,
+    struct xarray_regex *allowed,
+    struct xarray_regex *transient
+)
+{
+    if (seat->blocked)
+        return false;
+
+    // Do not save entry if mime type is configured to be blocked.
+    if (xarray_len_regex(blocked) > 0 && match_regex_array(blocked, mime_type))
+    {
+        seat->blocked = true;
+        return false;
+    }
+
+    if (!seat->transient && match_regex_array(transient, mime_type))
+        seat->transient = true;
+
+    // Check if mime type is allowed to be saved
+    if (xarray_len_regex(allowed) > 0 && !match_regex_array(allowed, mime_type))
+        return false;
+
+    return true;
+}
+
 static void
 data_offer_event_offer(
     void                                   *udata,
@@ -206,25 +252,30 @@ data_offer_event_offer(
     struct seat   *seat = udata;
     struct config *config = seat->wayland->config;
 
-    if (seat->blocked)
+    if (!seat_check_mime_type(
+            seat,
+            mime_type,
+            &config->blocked_mime_types,
+            &config->allowed_mime_types,
+            &config->transient_mime_types
+        ))
         return;
 
-    // Do not save entry if mime type is configured to be blocked.
-    if (xarray_len_regex(&config->blocked_mime_types) > 0 &&
-        match_regex_array(&config->blocked_mime_types, mime_type))
-        seat->blocked = true;
+    if (seat->wayland->active_toplevel != NULL)
+    {
+        struct toplevel        *tp = seat->wayland->active_toplevel;
+        struct config_toplevel *config_tp = tp->config;
 
-    if (seat->blocked)
-        return;
-
-    if (!seat->transient &&
-        match_regex_array(&config->transient_mime_types, mime_type))
-        seat->transient = true;
-
-    // Check if mime type is allowed to be saved
-    if (xarray_len_regex(&config->allowed_mime_types) > 0 &&
-        !match_regex_array(&config->allowed_mime_types, mime_type))
-        return;
+        assert(config_tp != NULL);
+        if (!seat_check_mime_type(
+                seat,
+                mime_type,
+                &config_tp->blocked_mime_types,
+                &config_tp->allowed_mime_types,
+                &config_tp->transient_mime_types
+            ))
+            return;
+    }
 
     char *str = strdup(mime_type);
 
@@ -521,7 +572,7 @@ seat_event_name(void *udata, struct wl_seat *proxy UNUSED, const char *name)
 {
     struct seat *seat = udata;
 
-    log_debug("New seat \"%s\"", name);
+    log_debug("New seat name \"%s\"", name);
 
     if (seat->wayland->ext_data_mgr == NULL)
     {
@@ -605,6 +656,233 @@ wayland_del_seat(struct seat *seat)
 }
 
 static void
+ftp_event_title(
+    void                                         *udata,
+    struct zwlr_foreign_toplevel_handle_v1 *proxy UNUSED,
+    const char                                   *title
+)
+{
+    struct toplevel *tp = udata;
+
+    free(tp->title);
+    tp->ack = false; // Set to false so that config is queried again
+    log_debug("New title for %p: \"%s\"", tp, title);
+    tp->title = strdup(title);
+}
+
+static void
+ftp_event_app_id(
+    void                                         *udata,
+    struct zwlr_foreign_toplevel_handle_v1 *proxy UNUSED,
+    const char                                   *app_id
+)
+{
+    struct toplevel *tp = udata;
+
+    free(tp->app_id);
+    tp->ack = false;
+    log_debug("New app_id for %p: \"%s\"", tp, app_id);
+    tp->app_id = strdup(app_id);
+}
+
+static void
+ftp_event_state(
+    void                                         *udata,
+    struct zwlr_foreign_toplevel_handle_v1 *proxy UNUSED,
+    struct wl_array                              *states
+)
+{
+    struct toplevel *tp = udata;
+
+    enum zwlr_foreign_toplevel_handle_v1_state *state;
+
+    wl_array_for_each(state, states)
+    {
+        if (*state == ZWLR_FOREIGN_TOPLEVEL_HANDLE_V1_STATE_ACTIVATED)
+        {
+            tp->activated = true;
+            return;
+        }
+    }
+    tp->activated = false;
+}
+
+static void
+wayland_del_toplevel(struct toplevel *tp)
+{
+    if (tp->wayland->active_toplevel == tp)
+        tp->wayland->active_toplevel = NULL;
+    zwlr_foreign_toplevel_handle_v1_destroy(tp->proxy);
+    free(tp->app_id);
+    free(tp->title);
+
+    xlist_unlink_toplevel(tp);
+    free(tp);
+}
+
+static void
+ftp_event_done(
+    void *udata, struct zwlr_foreign_toplevel_handle_v1 *proxy UNUSED
+)
+{
+    struct toplevel *tp = udata;
+    struct wayland  *wayland = tp->wayland;
+
+    // Check if toplevel is configured in config file now
+    if (!tp->ack)
+    {
+        struct config_toplevel *config_tp;
+
+        tp->config = NULL;
+        xarray_foreach(
+            config_toplevel, &wayland->config->configured_toplevels, config_tp
+        )
+        {
+            if ((xarray_len_regex(&config_tp->titles) == 0 ||
+                 (tp->title != NULL &&
+                  match_regex_array(&config_tp->titles, tp->title))) &&
+                (xarray_len_regex(&config_tp->app_ids) == 0 ||
+                 (tp->app_id != NULL &&
+                  match_regex_array(&config_tp->app_ids, tp->app_id))))
+            {
+                tp->config = config_tp;
+                goto stop;
+            }
+        }
+
+stop:
+        tp->ack = true;
+        if (tp->config == NULL)
+        {
+            if (wayland->active_toplevel == tp)
+                goto no_active;
+            return;
+        }
+    }
+    else if (tp->config == NULL)
+        return;
+
+    if (tp->activated && wayland->active_toplevel != tp)
+    {
+        const char *title = tp->title == NULL ? "(unknown)" : tp->title;
+        const char *app_id = tp->app_id == NULL ? "(unknown)" : tp->app_id;
+
+        log_debug(
+            "Toplevel %p (title: \"%s\", app_id: \"%s\") is active",
+            tp,
+            title,
+            app_id
+        );
+
+        wayland->active_toplevel = tp;
+    }
+    else if (!tp->activated && wayland->active_toplevel == tp)
+        goto no_active;
+
+    return;
+no_active:
+    tp = wayland->active_toplevel;
+    if (tp == NULL)
+        return;
+
+    const char *title = tp->title == NULL ? "(unknown)" : tp->title;
+    const char *app_id = tp->app_id == NULL ? "(unknown)" : tp->app_id;
+
+    log_debug(
+        "Toplevel %p (title: \"%s\", app_id: \"%s\") is not active",
+        tp,
+        title,
+        app_id
+    );
+    wayland->active_toplevel = NULL;
+}
+
+static void
+ftp_event_closed(
+    void *udata, struct zwlr_foreign_toplevel_handle_v1 *proxy UNUSED
+)
+{
+    struct toplevel *tp = udata;
+
+    const char *title = tp->title == NULL ? "(unknown)" : tp->title;
+    const char *app_id = tp->app_id == NULL ? "(unknown)" : tp->app_id;
+
+    log_debug(
+        "Toplevel %p (title: \"%s\", app_id: \"%s\") closed", tp, title, app_id
+    );
+
+    wayland_del_toplevel(tp);
+}
+
+static const struct zwlr_foreign_toplevel_handle_v1_listener ftp_listener = {
+    .title = ftp_event_title,
+    .app_id = ftp_event_app_id,
+    .output_enter = wayland_event_noop,
+    .output_leave = wayland_event_noop,
+    .state = ftp_event_state,
+    .done = ftp_event_done,
+    .closed = ftp_event_closed,
+    .parent = wayland_event_noop
+};
+
+static bool
+wayland_add_toplevel(
+    struct wayland *wayland, struct zwlr_foreign_toplevel_handle_v1 *proxy
+)
+{
+    struct toplevel *tp = calloc(1, sizeof(*tp));
+
+    if (tp == NULL)
+    {
+        log_errwarn("Error allocating toplevel structure");
+        return false;
+    }
+
+    tp->wayland = wayland;
+    tp->proxy = proxy;
+
+    zwlr_foreign_toplevel_handle_v1_add_listener(proxy, &ftp_listener, tp);
+
+    xlist_insert_after_toplevel(&wayland->toplevels, tp);
+
+    return true;
+}
+
+static void
+ftp_mgr_event_toplevel(
+    void                                          *udata,
+    struct zwlr_foreign_toplevel_manager_v1 *proxy UNUSED,
+    struct zwlr_foreign_toplevel_handle_v1        *handle
+)
+{
+    struct wayland *wayland = udata;
+
+    if (!wayland_add_toplevel(wayland, handle))
+        zwlr_foreign_toplevel_handle_v1_destroy(handle);
+}
+
+static void
+ftp_mgr_event_finished(
+    void *udata, struct zwlr_foreign_toplevel_manager_v1 *proxy UNUSED
+)
+{
+    struct wayland *wayland = udata;
+
+    log_debug("Foreign toplevel manager finished");
+
+    struct toplevel *tp;
+
+    xlist_foreach_safe(toplevel, &wayland->toplevels, tp)
+        wayland_del_toplevel(tp);
+
+    zwlr_foreign_toplevel_manager_v1_destroy(wayland->ftp_mgr);
+    wayland->ftp_mgr = NULL;
+}
+
+static const struct zwlr_foreign_toplevel_manager_v1_listener ftp_mgr_listener =
+    {.toplevel = ftp_mgr_event_toplevel, .finished = ftp_mgr_event_finished};
+
+static void
 registry_event_global(
     void               *udata,
     struct wl_registry *proxy,
@@ -619,6 +897,14 @@ registry_event_global(
     {
         wayland->ext_data_mgr = wl_registry_bind(
             proxy, name, &ext_data_control_manager_v1_interface, 1
+        );
+    }
+    else if (
+        strcmp(interface, zwlr_foreign_toplevel_manager_v1_interface.name) == 0
+    )
+    {
+        wayland->ftp_mgr = wl_registry_bind(
+            proxy, name, &zwlr_foreign_toplevel_manager_v1_interface, 1
         );
     }
     else if (strcmp(interface, wl_seat_interface.name) == 0)
@@ -683,6 +969,8 @@ wayland_init(
     );
 
     xlist_init_seat(&wayland->seats);
+    xlist_init_toplevel(&wayland->toplevels);
+    wayland->active_toplevel = NULL;
     wl_display_roundtrip(wayland->wct.display);
 
     if (wayland->ext_data_mgr == NULL)
@@ -690,6 +978,15 @@ wayland_init(
         log_error("ext-data-control-v1 protocol not supported by compositor");
         wayland_uninit(wayland);
         return false;
+    }
+
+    if (wayland->ftp_mgr != NULL)
+    {
+        log_debug("wlr-foreign-toplevel-management-v1 found");
+
+        zwlr_foreign_toplevel_manager_v1_add_listener(
+            wayland->ftp_mgr, &ftp_mgr_listener, wayland
+        );
     }
 
     wayland->signals = signals;
@@ -700,12 +997,17 @@ wayland_init(
 void
 wayland_uninit(struct wayland *wayland)
 {
-    struct seat *seat;
+    struct seat     *seat;
+    struct toplevel *tp;
 
-    xlist_foreach_safe(seat, &wayland->seats, seat) { wayland_del_seat(seat); }
+    xlist_foreach_safe(seat, &wayland->seats, seat) wayland_del_seat(seat);
+    xlist_foreach_safe(toplevel, &wayland->toplevels, tp)
+        wayland_del_toplevel(tp);
 
     if (wayland->ext_data_mgr != NULL)
         ext_data_control_manager_v1_destroy(wayland->ext_data_mgr);
+    if (wayland->ftp_mgr)
+        zwlr_foreign_toplevel_manager_v1_destroy(wayland->ftp_mgr);
 
     wayland_ct_uninit(&wayland->wct);
 }

@@ -21,7 +21,7 @@ testserver = executable(
   dependencies: [server_dep, wlr_dep, json_dep, xstructs_dep]
 )
 
-tests = ['clipboard', 'database', 'ipc']
+tests = ['clipboard', 'database', 'ipc', 'toplevel']
 
 foreach test : tests
   test(
