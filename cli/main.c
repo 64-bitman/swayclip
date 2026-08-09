@@ -701,7 +701,10 @@ command_set(int argc, char **argv)
     else if (!clear)
     {
         if (argv[optind] == NULL)
+        {
+            log_error("Invalid arguments");
             return false;
+        }
         id = strtol(argv[optind], NULL, 10);
     }
 
@@ -764,7 +767,10 @@ command_get(int argc, char **argv)
         return false;
 
     if (argv[optind] == NULL || argv[optind + 1] == NULL)
+    {
+        log_error("Invalid arguments");
         return false;
+    }
 
     int64_t id = strtol(argv[optind], NULL, 10);
 
@@ -846,7 +852,10 @@ command_delete(int argc, char **argv)
     if (!clear)
     {
         if (argv[optind] == NULL)
+        {
+            log_error("Invalid arguments");
             return false;
+        }
         id = strtol(argv[optind], NULL, 10);
     }
 
@@ -923,7 +932,10 @@ command_pin(int argc, char **argv)
         return false;
 
     if (argv[optind] == NULL)
+    {
+        log_error("Invalid arguments");
         return false;
+    }
 
     int64_t id = strtol(argv[optind], NULL, 10);
 
