@@ -58,7 +58,7 @@ enum log_level
     log_abort(fmt ": %s", ##__VA_ARGS__, strerror(errno));
 
 // clang-format off
-void log_init(const char *log_path);
+void log_init(const char *log_path, bool fatal);
 void log_set_level(enum log_level level);
 void log_print_ex( enum log_level level, const char *file, int lnum, const char *fmt, ...) PRINTFLIKE(4, 5);
 // clang-format on

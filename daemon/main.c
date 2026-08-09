@@ -1087,6 +1087,7 @@ help(void)
     printf("  -c, --config <PATH>       File to parse config.\n");
     printf("  -s, --db <PATH>           File to place SQLite database.\n");
     printf("  -r, --ready               Print \"Ready\" when fully initialized.\n");
+    printf("  -f, --fatal               Make log warnings and errors fatal.\n");
     printf("  -d, --debug               Enable debug log messages.\n");
     printf("  -h, --help                Show this help message.\n");
     printf("  -v, --version             Show version.\n");
@@ -1101,6 +1102,7 @@ main(int argc, char **argv)
         {"config", required_argument, 0, 'c'},
         {"db", required_argument, 0, 's'},
         {"ready", no_argument, 0, 'r'},
+        {"fatal", no_argument, 0, 'f'},
         {"debug", no_argument, 0, 'd'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'v'},
@@ -1109,18 +1111,20 @@ main(int argc, char **argv)
 
     int   c;
     int   idx;
-    bool  init_log = false;
     char *config = NULL;
     char *db_file = NULL;
     bool  readymsg = false;
+    bool fatal = false;
+    char *logfile = NULL;
+    bool loginit = false;
 
-    while ((c = getopt_long(argc, argv, "l:c:s:rdhv", options, &idx)) != -1)
+    while ((c = getopt_long(argc, argv, "l:c:s:rfdhv", options, &idx)) != -1)
     {
         switch (c)
         {
         case 'l':
-            log_init(optarg);
-            init_log = true;
+            free(logfile);
+            logfile = strdup(optarg);
             break;
         case 'c':
             free(config);
@@ -1132,6 +1136,9 @@ main(int argc, char **argv)
             break;
         case 'r':
             readymsg = true;
+            break;
+        case 'f':
+            fatal = true;
             break;
         case 'd':
             log_set_level(LOG_DEBUG);
@@ -1149,8 +1156,10 @@ main(int argc, char **argv)
         }
     }
 
-    if (!init_log)
-        log_init(NULL);
+    if (logfile != NULL)
+        loginit = true;
+    log_init(logfile, fatal);
+    free(logfile);
 
     sigset_t block;
 
@@ -1178,8 +1187,8 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    if (!init_log && state.config.logfile != NULL)
-        log_init(state.config.logfile);
+    if (!loginit && state.config.logfile != NULL)
+        log_init(state.config.logfile, fatal);
 
     if (!eventloop_init(&state.loop))
     {

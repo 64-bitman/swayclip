@@ -167,7 +167,7 @@ class Daemon:
     # Current events to listen for
     events: list[str]
 
-    def __init__(self, display: str, config: str, dir: pathlib.Path):
+    def __init__(self, display: str, config: str, dir: pathlib.Path, fatal: bool):
         path: str | None = os.getenv("TEST_DAEMON")
 
         assert path is not None
@@ -180,7 +180,16 @@ class Daemon:
         self.ipc_path = dir / "ipc.socket"
 
         self.proc = sb.Popen(
-            [path, "-r", "-d", "-c", str(self.config_path), "-s", str(self.db_path)],
+            [
+                path,
+                "-r",
+                "-d",
+                "-f" if fatal else "",
+                "-c",
+                str(self.config_path),
+                "-s",
+                str(self.db_path),
+            ],
             stdout=sb.PIPE,
             text=True,
             bufsize=1,
@@ -308,8 +317,8 @@ def daemon_runner(tmp_path) -> Generator:
     """Run swayclip daemon"""
     created: list[Daemon] = []
 
-    def run_daemon(display: str, config: str) -> Daemon:
-        dmon: Daemon = Daemon(display, config, tmp_path)
+    def run_daemon(display: str, config: str, fatal: bool = True) -> Daemon:
+        dmon: Daemon = Daemon(display, config, tmp_path, fatal)
 
         created.append(dmon)
         return dmon

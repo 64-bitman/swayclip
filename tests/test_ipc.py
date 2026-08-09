@@ -33,7 +33,7 @@ def test_bad_input(compositor: Compositor, daemon_runner: Callable):
     """Test if daemon recovers from invalid JSON message"""
     compositor.add_seat("test")
 
-    daemon: Daemon = daemon_runner(compositor.display, "")
+    daemon: Daemon = daemon_runner(compositor.display, "", False)
 
     data: bytes = '{"hey": 2, "}'.encode("utf-8")
     header: bytes = struct.pack("=BI", 0, len(data))

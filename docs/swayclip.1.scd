@@ -22,6 +22,9 @@ swayclip - Clipboard manager for Wayland compositors
 *-r, --ready*
 	Print the line "Ready" when fully initialized. Used for testing.
 
+*-f, --fatal*
+	Abort the program on warning or error log messages. Used for testing.
+
 *-d, --debug*
 	Enable debug log messages.
 

@@ -33,6 +33,7 @@
 
 static FILE          *LOG_FP = NULL;
 static bool           LOG_COLOR = true;
+static bool           FATAL = false;
 static enum log_level LOG_LEVEL = LOG_INFO;
 
 static const char *LEVEL_NAMES[] = {
@@ -53,7 +54,7 @@ static const char *LEVEL_COLORS[] = {
  * If "log_path" is NULL, then use stderr.
  */
 void
-log_init(const char *log_path)
+log_init(const char *log_path, bool fatal)
 {
     if (LOG_FP != NULL && LOG_FP != stderr)
         fclose(LOG_FP);
@@ -70,6 +71,7 @@ log_init(const char *log_path)
     if ((no_color != NULL && *no_color != NUL) ||
         (LOG_FP == stderr && !isatty(STDERR_FILENO)) || log_path != NULL)
         LOG_COLOR = false;
+    FATAL = fatal;
 }
 
 void
@@ -83,6 +85,11 @@ log_print_ex(
     enum log_level level, const char *file, int lnum, const char *fmt, ...
 )
 {
+    if (FATAL && (level == LOG_WARN || level == LOG_ERROR))
+    {
+        fprintf(stderr, "Aborting!\n");
+        exit(1);
+    }
     if (LOG_FP == NULL || LOG_LEVEL > level)
         return;
 
