@@ -160,6 +160,7 @@ config_init(struct config *config, const char *file)
     xarray_init_config_seat(&config->configured_seats);
     xarray_init_regex(&config->allowed_mime_types);
     xarray_init_regex(&config->blocked_mime_types);
+    xarray_init_regex(&config->transient_mime_types);
 
     const struct config_option opts[] = {
         CONFIG_INT64_POS("daemon.max_entries", &config->max_entries),
