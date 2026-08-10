@@ -31,6 +31,11 @@ struct ipc_client
     // Bitflag of events this client has subscribed to
     uint events;
 
+    // Number of remaining messages to coalesce into a single JSON array
+    bool                collate;
+    size_t              n_collate;
+    struct json_object *collate_arr;
+
     struct ipc   *ipc;
     struct ipc_ct ict;
 
@@ -48,7 +53,38 @@ message_callback(struct ipc_message *msg, void *udata)
     if (msg->type != IPC_MESSAGE_CALL)
         return;
 
-    client->ipc->callback(client, msg, client->ipc->callback_udata);
+    // If message is a JSON array, assume it is an atomic array of requests
+    if (json_object_is_type(msg->payload, json_type_array))
+    {
+
+        client->collate_arr = json_object_new_array();
+        if (client->collate_arr == NULL)
+            return;
+
+        client->collate = true;
+        client->n_collate = json_object_array_length(msg->payload);
+
+        for (size_t i = 0; i < json_object_array_length(msg->payload); i++)
+        {
+            struct ipc_message tmp = {
+                .flags = msg->flags,
+                .type = msg->type,
+                .payload = json_object_array_get_idx(msg->payload, i)
+            };
+
+            if (msg->flags & IPC_CT_NO_MMAP)
+                tmp.aux_fd = -1;
+            else
+            {
+                tmp.aux_data = NULL;
+                tmp.aux_data_len = 0;
+            }
+
+            client->ipc->callback(client, &tmp, client->ipc->callback_udata);
+        }
+    }
+    else
+        client->ipc->callback(client, msg, client->ipc->callback_udata);
     (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
 }
 
@@ -128,6 +164,9 @@ ipc_add_client(struct ipc *ipc, int client_fd)
 static void
 ipc_client_free(struct ipc_client *client)
 {
+    if (client->collate_arr != NULL)
+        json_object_put(client->collate_arr);
+
     eventloop_del(client->ipc->loop, client->ict.fd);
     ipc_ct_uninit(&client->ict);
 
@@ -397,7 +436,9 @@ ipc_event_entry_update(
 }
 
 void
-ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos, int64_t new_pos)
+ipc_event_entry_move(
+    struct ipc *ipc, int64_t entry_id, int64_t old_pos, int64_t new_pos
+)
 {
     if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_MOVE))
         return;
@@ -440,13 +481,37 @@ ipc_event_entry_state(struct ipc *ipc, int64_t entry_id, bool state)
     );
 }
 
+static void
+ipc_client_respond(
+    struct ipc_client *client, struct json_object *msg, int scm_fd
+)
+{
+    if (client->collate)
+    {
+        json_object_array_add(client->collate_arr, msg);
+        if (scm_fd != -1)
+            close(scm_fd);
+
+        if (--client->n_collate == 0)
+        {
+            ipc_ct_write_msg(
+                &client->ict, IPC_MESSAGE_CALL, client->collate_arr, -1
+            );
+            client->collate_arr = NULL;
+            client->collate = false;
+        }
+    }
+    else
+        ipc_ct_write_msg(&client->ict, IPC_MESSAGE_CALL, msg, scm_fd);
+}
+
 void
 ipc_client_send(struct ipc_client *client, struct json_object *msg, int scm_fd)
 {
     if (msg == NULL)
         return;
 
-    ipc_ct_write_msg(&client->ict, IPC_MESSAGE_CALL, msg, scm_fd);
+    ipc_client_respond(client, msg, scm_fd);
 }
 
 void
@@ -459,9 +524,8 @@ ipc_client_send_error(struct ipc_client *client, const char *desc_fmt, ...)
     vsnprintf(buf, sizeof(buf), desc_fmt, ap);
     va_end(ap);
 
-    ipc_ct_write_msg(
-        &client->ict,
-        IPC_MESSAGE_CALL,
+    ipc_client_respond(
+        client,
         build_json_object(
             NULL, 1, JSON_STR("type", "error"), JSON_STR("desc", buf), NULL
         ),
@@ -472,9 +536,8 @@ ipc_client_send_error(struct ipc_client *client, const char *desc_fmt, ...)
 void
 ipc_client_send_success(struct ipc_client *client)
 {
-    ipc_ct_write_msg(
-        &client->ict,
-        IPC_MESSAGE_CALL,
+    ipc_client_respond(
+        client,
         build_json_object(NULL, -1, JSON_STR("type", "success"), NULL),
         -1
     );
@@ -483,9 +546,8 @@ ipc_client_send_success(struct ipc_client *client)
 void
 ipc_client_send_success_fd(struct ipc_client *client, int scm_fd)
 {
-    ipc_ct_write_msg(
-        &client->ict,
-        IPC_MESSAGE_CALL,
+    ipc_client_respond(
+        client,
         build_json_object(NULL, -1, JSON_STR("type", "success"), NULL),
         scm_fd
     );
