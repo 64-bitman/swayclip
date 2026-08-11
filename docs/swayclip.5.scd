@@ -101,9 +101,10 @@ These options go under a *"mime_types"* section, which itself lives inside the
 *"daemon"* section. They let you control which kinds of content get saved.
 
 *allowed = [array of regular expressions]*
-	A list of patterns (POSIX regular expressions) describing which content
-	types are okay to save — for example, plain text or images. If something
-	copied matches one of these patterns, swayclip will store it.
+	A list of patterns (POSIX regular expressions) describing which mime types
+	(can be thought of as clipboard formats) are okay to save, for example,
+	plain text or images. If something copied matches one of these patterns,
+	swayclip will store it.
 
 *blocked = [array of regular expressions]*
 	Works the same way as "allowed" above, but in reverse: if a copied item
