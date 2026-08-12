@@ -323,7 +323,7 @@ is_success(struct json_object *resp)
     {
         const char *desc;
 
-        CHECK(extract_json_object(resp, JSON_STR("desc", &desc), NULL));
+        CHECK(extract_json_object(resp, JSON_EXTRACT_STR("desc", &desc), NULL));
         log_error("IPC error: %s", desc);
 
         return false;
@@ -383,9 +383,9 @@ print_entry(int64_t start, int64_t n, bool json, bool print_empty)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("type", IPC_REQ_GET_HISTORY),
-            JSON_INT("start", start),
-            JSON_INT("n", n),
+            JSON_FIELD_STR("type", IPC_REQ_GET_HISTORY),
+            JSON_FIELD_INT("start", start),
+            JSON_FIELD_INT("n", n),
             NULL
         ),
         &resp
@@ -425,11 +425,11 @@ print_entry(int64_t start, int64_t n, bool json, bool print_empty)
 
         CHECK(extract_json_object(
             entry,
-            JSON_INT("id", &id),
-            JSON_BOOL("pinned", &pinned),
-            JSON_BOOL("current", &current),
-            JSON_STR("content_type", &content_type),
-            JSON_STR("content_mime_type", &mime_type),
+            JSON_EXTRACT_INT("id", &id),
+            JSON_EXTRACT_BOOL("pinned", &pinned),
+            JSON_EXTRACT_BOOL("current", &current),
+            JSON_EXTRACT_STR("content_type", &content_type),
+            JSON_EXTRACT_STR("content_mime_type", &mime_type),
             NULL
         ));
 
@@ -439,9 +439,9 @@ print_entry(int64_t start, int64_t n, bool json, bool print_empty)
             build_json_object(
                 NULL,
                 -1,
-                JSON_STR("type", IPC_REQ_GET_DATA),
-                JSON_INT("id", id),
-                JSON_STR("mime_type", mime_type),
+                JSON_FIELD_STR("type", IPC_REQ_GET_DATA),
+                JSON_FIELD_INT("id", id),
+                JSON_FIELD_STR("mime_type", mime_type),
                 NULL
             ),
             &data_resp
@@ -616,7 +616,7 @@ command_len(int argc, char **argv)
 
     CHECK(roundtrip(
         build_json_object(
-            NULL, -1, JSON_STR("type", IPC_REQ_GET_HISTORY_LENGTH), NULL
+            NULL, -1, JSON_FIELD_STR("type", IPC_REQ_GET_HISTORY_LENGTH), NULL
         ),
         &resp
     ));
@@ -625,7 +625,7 @@ command_len(int argc, char **argv)
 
     int64_t size;
 
-    CHECK(extract_json_object(resp.obj, JSON_INT("size", &size), NULL));
+    CHECK(extract_json_object(resp.obj, JSON_EXTRACT_INT("size", &size), NULL));
 
     printf("%" PRId64 "\n", size);
 
@@ -714,8 +714,8 @@ command_set(int argc, char **argv)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("type", IPC_REQ_SET_CLIPBOARD),
-            JSON_INT("id", id),
+            JSON_FIELD_STR("type", IPC_REQ_SET_CLIPBOARD),
+            JSON_FIELD_INT("id", id),
             NULL
         ),
         &resp
@@ -780,9 +780,9 @@ command_get(int argc, char **argv)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("type", IPC_REQ_GET_DATA),
-            JSON_INT("id", id),
-            JSON_STR("mime_type", argv[optind + 1]),
+            JSON_FIELD_STR("type", IPC_REQ_GET_DATA),
+            JSON_FIELD_INT("id", id),
+            JSON_FIELD_STR("mime_type", argv[optind + 1]),
             NULL
         ),
         &resp
@@ -865,8 +865,8 @@ command_delete(int argc, char **argv)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("type", IPC_REQ_DELETE_ENTRY),
-            JSON_INT("id", id),
+            JSON_FIELD_STR("type", IPC_REQ_DELETE_ENTRY),
+            JSON_FIELD_INT("id", id),
             NULL
         ),
         &resp
@@ -954,9 +954,9 @@ command_pin(int argc, char **argv)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("type", IPC_REQ_PIN_ENTRY),
-            JSON_INT("id", id),
-            JSON_STR("pin", pinstr),
+            JSON_FIELD_STR("type", IPC_REQ_PIN_ENTRY),
+            JSON_FIELD_INT("id", id),
+            JSON_FIELD_STR("pin", pinstr),
             NULL
         ),
         &resp
@@ -1011,7 +1011,7 @@ command_current(int argc, char **argv)
 
     CHECK(roundtrip(
         build_json_object(
-            NULL, -1, JSON_STR("type", IPC_REQ_GET_CURRENT), NULL
+            NULL, -1, JSON_FIELD_STR("type", IPC_REQ_GET_CURRENT), NULL
         ),
         &resp
     ));
@@ -1085,8 +1085,8 @@ command_events(int argc, char **argv)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("type", IPC_REQ_SUBSCRIBE),
-            JSON_OBJ("events", arr),
+            JSON_FIELD_STR("type", IPC_REQ_SUBSCRIBE),
+            JSON_FIELD_OBJ("events", arr),
             NULL
         ),
         &resp

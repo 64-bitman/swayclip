@@ -371,8 +371,8 @@ ipc_event_entry_add(struct ipc *ipc, int64_t entry_id)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", IPC_EVENT_ENTRY_ADD),
-            JSON_INT("id", entry_id),
+            JSON_FIELD_STR("event", IPC_EVENT_ENTRY_ADD),
+            JSON_FIELD_INT("id", entry_id),
             NULL
         )
     );
@@ -394,8 +394,8 @@ ipc_event_entry_delete(struct ipc *ipc, int64_t entry_id)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", IPC_EVENT_ENTRY_DELETE),
-            JSON_INT("id", entry_id),
+            JSON_FIELD_STR("event", IPC_EVENT_ENTRY_DELETE),
+            JSON_FIELD_INT("id", entry_id),
             NULL
         )
     );
@@ -420,15 +420,17 @@ ipc_event_entry_update(
     msg = build_json_object(
         NULL,
         -1,
-        JSON_STR("event", IPC_EVENT_ENTRY_UPDATE),
-        JSON_INT("id", entry_id),
+        JSON_FIELD_STR("event", IPC_EVENT_ENTRY_UPDATE),
+        JSON_FIELD_INT("id", entry_id),
         NULL
     );
 
     if (pinned != NULL)
-        build_json_object(msg, -1, JSON_BOOL("pinned", *pinned), NULL);
+        build_json_object(msg, -1, JSON_FIELD_BOOL("pinned", *pinned), NULL);
     if (update_time != NULL)
-        build_json_object(msg, -1, JSON_INT("update_time", *update_time), NULL);
+        build_json_object(
+            msg, -1, JSON_FIELD_INT("update_time", *update_time), NULL
+        );
     ipc_emit_event(
         ipc, IPC_EVENT_ENTRY_UPDATE, IPC_EVENT_FLAG_ENTRY_UPDATE, msg
     );
@@ -448,10 +450,10 @@ ipc_event_entry_move(
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", IPC_EVENT_ENTRY_MOVE),
-            JSON_INT("id", entry_id),
-            JSON_INT("old_pos", old_pos),
-            JSON_INT("new_pos", new_pos),
+            JSON_FIELD_STR("event", IPC_EVENT_ENTRY_MOVE),
+            JSON_FIELD_INT("id", entry_id),
+            JSON_FIELD_INT("old_pos", old_pos),
+            JSON_FIELD_INT("new_pos", new_pos),
             NULL
         )
     );
@@ -472,9 +474,9 @@ ipc_event_entry_state(struct ipc *ipc, int64_t entry_id, bool state)
         build_json_object(
             NULL,
             -1,
-            JSON_STR("event", IPC_EVENT_ENTRY_STATE),
-            JSON_INT("id", entry_id),
-            JSON_BOOL("state", state),
+            JSON_FIELD_STR("event", IPC_EVENT_ENTRY_STATE),
+            JSON_FIELD_INT("id", entry_id),
+            JSON_FIELD_BOOL("state", state),
             NULL
         )
     );
@@ -526,7 +528,11 @@ ipc_client_send_error(struct ipc_client *client, const char *desc_fmt, ...)
     ipc_client_respond(
         client,
         build_json_object(
-            NULL, 1, JSON_STR("type", "error"), JSON_STR("desc", buf), NULL
+            NULL,
+            1,
+            JSON_FIELD_STR("type", "error"),
+            JSON_FIELD_STR("desc", buf),
+            NULL
         ),
         -1
     );
@@ -537,7 +543,7 @@ ipc_client_send_success(struct ipc_client *client)
 {
     ipc_client_respond(
         client,
-        build_json_object(NULL, -1, JSON_STR("type", "success"), NULL),
+        build_json_object(NULL, -1, JSON_FIELD_STR("type", "success"), NULL),
         -1
     );
 }
@@ -547,7 +553,7 @@ ipc_client_send_success_fd(struct ipc_client *client, int scm_fd)
 {
     ipc_client_respond(
         client,
-        build_json_object(NULL, -1, JSON_STR("type", "success"), NULL),
+        build_json_object(NULL, -1, JSON_FIELD_STR("type", "success"), NULL),
         scm_fd
     );
 }

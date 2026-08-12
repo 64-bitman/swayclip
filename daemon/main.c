@@ -381,10 +381,10 @@ wsignal_selection(
             content_mime = mime_type;
         }
         // Use "text/plain" mime type if possible for "text" content type
-        if (ctype == CONTENT_TEXT  && (strcmp(mime_type, "text/plain") == 0 ||
-            strcmp(mime_type, "text/plain;charset=utf-8") == 0))
+        if (ctype == CONTENT_TEXT &&
+            (strcmp(mime_type, "text/plain") == 0 ||
+             strcmp(mime_type, "text/plain;charset=utf-8") == 0))
             content_mime = mime_type;
-
     }
 
     uint8_t entry_hash[SHA256_BLOCK_SIZE];
@@ -750,12 +750,12 @@ get_entry_callback(
     (void)build_json_object(
         obj,
         -1,
-        JSON_INT("id", id),
-        JSON_INT("creation_time", creation_time),
-        JSON_INT("update_time", update_time),
-        JSON_BOOL("pinned", pinned),
-        JSON_BOOL("current", state->id == id),
-        JSON_OBJ("mime_types", mime_types),
+        JSON_FIELD_INT("id", id),
+        JSON_FIELD_INT("creation_time", creation_time),
+        JSON_FIELD_INT("update_time", update_time),
+        JSON_FIELD_BOOL("pinned", pinned),
+        JSON_FIELD_BOOL("current", state->id == id),
+        JSON_FIELD_OBJ("mime_types", mime_types),
         NULL
     );
 
@@ -768,7 +768,7 @@ get_entry_callback(
         json_object_put(obj);
         return;
     }
-    (void)build_json_object(obj, -1, JSON_STR("content_type", buf), NULL);
+    (void)build_json_object(obj, -1, JSON_FIELD_STR("content_type", buf), NULL);
 
     if (!database_get_attribute(
             db, id, DB_ATTRIBUTE_CONTENT_MIME, 's', buf, sizeof(buf)
@@ -777,7 +777,9 @@ get_entry_callback(
         json_object_put(obj);
         return;
     }
-    (void)build_json_object(obj, -1, JSON_STR("content_mime_type", buf), NULL);
+    (void)build_json_object(
+        obj, -1, JSON_FIELD_STR("content_mime_type", buf), NULL
+    );
 
     if (json_object_array_add(arr, obj) == -1)
         json_object_put(obj);
@@ -791,7 +793,9 @@ request_callback(
     struct state *state = udata;
     const char   *type;
 
-    if (!extract_json_object(req->payload, JSON_STR("type", &type), NULL))
+    if (!extract_json_object(
+            req->payload, JSON_EXTRACT_STR("type", &type), NULL
+        ))
     {
         ipc_client_send_error(client, IPC_INVALID_ARGS);
         return;
@@ -804,7 +808,7 @@ request_callback(
         struct json_object *arr;
 
         if (!extract_json_object(
-                req->payload, JSON_ARRAY("events", &arr), NULL
+                req->payload, JSON_EXTRACT_ARRAY("events", &arr), NULL
             ))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
@@ -854,7 +858,7 @@ request_callback(
         else
             ipc_client_send(
                 client,
-                build_json_object(NULL, -1, JSON_INT("size", size), NULL),
+                build_json_object(NULL, -1, JSON_FIELD_INT("size", size), NULL),
                 -1
             );
     }
@@ -864,7 +868,10 @@ request_callback(
         int64_t n;
 
         if (!extract_json_object(
-                req->payload, JSON_INT("start", &start), JSON_INT("n", &n), NULL
+                req->payload,
+                JSON_EXTRACT_INT("start", &start),
+                JSON_EXTRACT_INT("n", &n),
+                NULL
             ))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
@@ -898,8 +905,8 @@ request_callback(
 
         if (!extract_json_object(
                 req->payload,
-                JSON_INT("id", &id),
-                JSON_STR("mime_type", &mime_type),
+                JSON_EXTRACT_INT("id", &id),
+                JSON_EXTRACT_STR("mime_type", &mime_type),
                 NULL
             ))
         {
@@ -961,7 +968,7 @@ request_callback(
     {
         int64_t id;
 
-        if (!extract_json_object(req->payload, JSON_INT("id", &id), NULL))
+        if (!extract_json_object(req->payload, JSON_EXTRACT_INT("id", &id), NULL))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
             return;
@@ -986,7 +993,7 @@ request_callback(
     {
         int64_t id;
 
-        if (!extract_json_object(req->payload, JSON_INT("id", &id), NULL))
+        if (!extract_json_object(req->payload, JSON_EXTRACT_INT("id", &id), NULL))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
             return;
@@ -1037,8 +1044,8 @@ request_callback(
 
         if (!extract_json_object(
                 req->payload,
-                JSON_INT("id", &id),
-                JSON_STR("pin", &pinstr),
+                JSON_EXTRACT_INT("id", &id),
+                JSON_EXTRACT_STR("pin", &pinstr),
                 NULL
             ))
         {

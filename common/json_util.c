@@ -23,17 +23,8 @@
 
 /*
  * Build a JSON object or modify an existing one using the given arguments.
- * Variadic argument are in the format of <key name>, <type>, <value>. Must be
- * terminated with NULL sentinel.
- *
- * Valid types are:
- * 'n': json_type_null,
- * 'b': json_type_boolean,
- * 'd': json_type_double,
- * 'i': json_type_int (int64_t)
- * 'o': struct json_object pointer (ownership taken),
- * 's': json_type_string (no length arg),
- * 'S': json_type_string (with length arg)
+ * Variadic argument are in the format of <key name>, <struct json_object>. Must
+ * be terminated with NULL.
  *
  * If "add_flags" is -1, then use default flags.
  */
@@ -61,61 +52,10 @@ build_json_object(struct json_object *obj, int add_flags, ...)
         if (key == NULL)
             break;
 
-        int type = va_arg(ap, int);
+        struct json_object *val = va_arg(ap, struct json_object *);
 
-        switch (type)
-        {
-        case 'n':
-            json_object_object_add_ex(
-                obj, key, json_object_new_null(), add_flags
-            );
-            break;
-        case 'b':
-            json_object_object_add_ex(
-                obj, key, json_object_new_boolean(va_arg(ap, int)), add_flags
-            );
-            break;
-        case 'd':
-            json_object_object_add_ex(
-                obj, key, json_object_new_double(va_arg(ap, double)), add_flags
-            );
-            break;
-        case 'i':
-            json_object_object_add_ex(
-                obj, key, json_object_new_int64(va_arg(ap, int64_t)), add_flags
-            );
-            break;
-        case 'o':
-        case 'a':
-        {
-            struct json_object *val = va_arg(ap, struct json_object *);
-
-            if (json_object_object_add_ex(obj, key, val, add_flags) == -1)
-                json_object_put(val);
-            break;
-        }
-        case 's':
-            json_object_object_add_ex(
-                obj,
-                key,
-                json_object_new_string(va_arg(ap, const char *)),
-                add_flags
-            );
-            break;
-        case 'S':
-        {
-            const char *str = va_arg(ap, const char *);
-            int         len = va_arg(ap, int);
-
-            json_object_object_add_ex(
-                obj, key, json_object_new_string_len(str, len), add_flags
-            );
-            break;
-        }
-        default:
-            log_abort("Unknown json type %c", type);
-            break;
-        }
+        if (json_object_object_add_ex(obj, key, val, add_flags) == -1)
+            json_object_put(val);
     }
 
     va_end(ap);
@@ -199,4 +139,32 @@ exit:
     va_end(ap);
 
     return ret;
+}
+
+struct json_object *
+build_json_array(struct json_object *arr, ...)
+{
+    if (arr == NULL)
+        arr = json_object_new_array();
+
+    if (arr == NULL)
+        return NULL;
+
+    va_list ap;
+
+    va_start(ap, arr);
+
+    while (true)
+    {
+        struct json_object *val = va_arg(ap, struct json_object *);
+
+        if (val == NULL)
+            break;
+
+        json_object_array_add(arr, val);
+    }
+
+    va_end(ap);
+
+    return arr;
 }
