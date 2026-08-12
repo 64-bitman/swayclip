@@ -256,12 +256,15 @@ def test_content_type(compositor: Compositor, daemon_runner: Callable):
 
     daemon: Daemon = daemon_runner(compositor.display, "")
 
+    # "text/plain" should always be preferred over others for text content type
     daemon.add_events(["entry_add"])
-    compositor.copy("test", Selection.REGULAR, {"text/html": "html"})
+    compositor.copy(
+        "test", Selection.REGULAR, {"text/html": "html", "text/plain": "text"}
+    )
     daemon.recv_event("entry_add")
 
     msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
-    cmp_entry(msg.msg[0], 1, ["text/html"], False, "text", "text/html")
+    cmp_entry(msg.msg[0], 1, ["text/html", "text/plain"], False, "text", "text/plain")
 
     daemon.add_events(["entry_add"])
     compositor.copy("test", Selection.REGULAR, {"image/png": "image"})

@@ -380,6 +380,11 @@ wsignal_selection(
             ctype = m_ctype;
             content_mime = mime_type;
         }
+        // Use "text/plain" mime type if possible for "text" content type
+        if (ctype == CONTENT_TEXT  && (strcmp(mime_type, "text/plain") == 0 ||
+            strcmp(mime_type, "text/plain;charset=utf-8") == 0))
+            content_mime = mime_type;
+
     }
 
     uint8_t entry_hash[SHA256_BLOCK_SIZE];

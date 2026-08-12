@@ -70,7 +70,7 @@ def test_atomic_requests(compositor: Compositor, daemon_runner: Callable):
 
     daemon.sock.sendall(header + data)
 
-    msg =  daemon.recv_msg()
+    msg = daemon.recv_msg()
 
     assert msg.msg == [
         {"size": 1},
