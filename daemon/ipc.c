@@ -56,7 +56,6 @@ message_callback(struct ipc_message *msg, void *udata)
     // If message is a JSON array, assume it is an atomic array of requests
     if (json_object_is_type(msg->payload, json_type_array))
     {
-
         client->collate_arr = json_object_new_array();
         if (client->collate_arr == NULL)
             return;

@@ -3,7 +3,6 @@ from collections import Counter
 import sys
 import mmap
 import socket
-from yapftests.main_test import captured_output
 from typing import NamedTuple, Generator, Callable, Any, SupportsFloat
 from enum import StrEnum, Enum
 import subprocess as sb
