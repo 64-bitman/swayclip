@@ -55,8 +55,6 @@ enum ipc_message_type
 // "aux_data_len".
 struct ipc_message
 {
-    uint flags; // IPC_CT_* flags
-
     enum ipc_message_type type;
     struct json_object   *payload;
     union

@@ -191,7 +191,7 @@ ipc_ct_read(
         if (j_err == json_tokener_success)
         {
             struct ipc_message imsg = {
-                .flags = flags, .type = ict->pending_type, .payload = msg
+                .type = ict->pending_type, .payload = msg
             };
             int scm_fd = ict->scm_fd;
 
