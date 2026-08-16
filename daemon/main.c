@@ -968,7 +968,9 @@ request_callback(
     {
         int64_t id;
 
-        if (!extract_json_object(req->payload, JSON_EXTRACT_INT("id", &id), NULL))
+        if (!extract_json_object(
+                req->payload, JSON_EXTRACT_INT("id", &id), NULL
+            ))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
             return;
@@ -993,7 +995,9 @@ request_callback(
     {
         int64_t id;
 
-        if (!extract_json_object(req->payload, JSON_EXTRACT_INT("id", &id), NULL))
+        if (!extract_json_object(
+                req->payload, JSON_EXTRACT_INT("id", &id), NULL
+            ))
         {
             ipc_client_send_error(client, IPC_INVALID_ARGS);
             return;
@@ -1126,9 +1130,9 @@ main(int argc, char **argv)
     char *config = NULL;
     char *db_file = NULL;
     bool  readymsg = false;
-    bool fatal = false;
+    bool  fatal = false;
     char *logfile = NULL;
-    bool loginit = false;
+    bool  loginit = false;
 
     while ((c = getopt_long(argc, argv, "l:c:s:rfdhv", options, &idx)) != -1)
     {
