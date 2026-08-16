@@ -51,7 +51,7 @@ message_callback(struct ipc_message *imsg, void *udata)
 {
     struct ipc_client *client = udata;
 
-    if (imsg->type != IPC_MESSAGE_CALL)
+    if (imsg->type != IPC_MESSAGE_REQUEST)
         goto exit;
 
     if (client->hold > 0)
@@ -163,10 +163,13 @@ ipc_add_client(struct ipc *ipc, int client_fd)
 static void
 ipc_client_free(struct ipc_client *client)
 {
+    log_debug("IPC client closed");
+
     eventloop_del(client->ipc->loop, client->ict.fd);
     ipc_ct_uninit(&client->ict);
 
-    log_debug("IPC client closed");
+    xarray_foreach(&client->hold_arr, i)
+        ipc_message_clear(xarray_ptr_ipc_message(&client->hold_arr, i));
 
     xarray_uninit_ipc_message(&client->hold_arr);
     xlist_unlink_ipc_client(client);
@@ -486,7 +489,7 @@ ipc_client_send(struct ipc_client *client, struct json_object *msg, int scm_fd)
     if (msg == NULL)
         return;
 
-    ipc_ct_write_msg(&client->ict, IPC_MESSAGE_CALL, msg, scm_fd);
+    ipc_ct_write_msg(&client->ict, IPC_MESSAGE_RESPONSE, msg, scm_fd);
 }
 
 void
@@ -501,14 +504,8 @@ ipc_client_send_error(struct ipc_client *client, const char *desc_fmt, ...)
 
     ipc_ct_write_msg(
         &client->ict,
-        IPC_MESSAGE_CALL,
-        build_json_object(
-            NULL,
-            1,
-            JSON_FIELD_STR("type", "error"),
-            JSON_FIELD_STR("desc", buf),
-            NULL
-        ),
+        IPC_MESSAGE_ERROR,
+        build_json_object(NULL, 1, JSON_FIELD_STR("desc", buf), NULL),
         -1
     );
 }
@@ -517,10 +514,7 @@ void
 ipc_client_send_success(struct ipc_client *client)
 {
     ipc_ct_write_msg(
-        &client->ict,
-        IPC_MESSAGE_CALL,
-        build_json_object(NULL, -1, JSON_FIELD_STR("type", "success"), NULL),
-        -1
+        &client->ict, IPC_MESSAGE_SUCCESS, build_json_object(NULL, -1, NULL), -1
     );
 }
 
@@ -529,8 +523,8 @@ ipc_client_send_success_fd(struct ipc_client *client, int scm_fd)
 {
     ipc_ct_write_msg(
         &client->ict,
-        IPC_MESSAGE_CALL,
-        build_json_object(NULL, -1, JSON_FIELD_STR("type", "success"), NULL),
+        IPC_MESSAGE_SUCCESS,
+        build_json_object(NULL, -1, NULL),
         scm_fd
     );
 }

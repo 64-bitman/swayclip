@@ -45,8 +45,14 @@
 
 enum ipc_message_type
 {
-    IPC_MESSAGE_CALL = 0,
-    IPC_MESSAGE_EVENT
+    // Sent by client
+    IPC_MESSAGE_REQUEST = 0,
+
+    // Sent by daemon
+    IPC_MESSAGE_RESPONSE = 1,
+    IPC_MESSAGE_SUCCESS = 2,
+    IPC_MESSAGE_ERROR = 3,
+    IPC_MESSAGE_EVENT = 4
 };
 
 // Messages are in the format of <type><payload size><payload>, where <type> is

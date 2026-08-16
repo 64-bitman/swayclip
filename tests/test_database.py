@@ -5,6 +5,7 @@ from conftest import Daemon
 from conftest import Selection
 from conftest import cmp_entry
 from conftest import wait_cond
+from conftest import MessageType
 
 
 def test_set_clipboard(compositor: Compositor, daemon_runner: Callable):
@@ -37,7 +38,7 @@ def test_set_clipboard(compositor: Compositor, daemon_runner: Callable):
     assert pmsg.msg["id"] == 5
     assert pmsg.msg["state"] == True
     msg = daemon.recv_msg()
-    assert msg.msg == {"type": "success"}
+    assert msg.msg_type == MessageType.SUCCESS
     compositor.expect("test", Selection.REGULAR, {"a": "5"})
 
     msg = daemon.roundtrip({"type": "get_history", "start": 5, "n": 1})
@@ -49,16 +50,16 @@ def test_set_clipboard(compositor: Compositor, daemon_runner: Callable):
     assert update_time < msg.msg[0]["update_time"]
 
     msg = daemon.roundtrip({"type": "set_clipboard", "id": 10})
-    assert msg.msg == {"type": "success"}
+    assert msg.msg_type == MessageType.SUCCESS
     compositor.expect("test", Selection.REGULAR, {"a": "10"})
 
     # Clear clipboard
     msg = daemon.roundtrip({"type": "set_clipboard", "id": -1})
-    assert msg.msg == {"type": "success"}
+    assert msg.msg_type == MessageType.SUCCESS
     compositor.expect("test", Selection.REGULAR, None)
 
     msg = daemon.roundtrip({"type": "set_clipboard", "id": 1})
-    assert msg.msg == {"type": "success"}
+    assert msg.msg_type == MessageType.SUCCESS
     compositor.expect("test", Selection.REGULAR, {"a": "1"})
 
 
@@ -187,9 +188,10 @@ def test_trim(compositor: Compositor, daemon_runner: Callable):
     compositor.copy("test", Selection.REGULAR, {"a": "b"})
     daemon.recv_event("entry_add")
 
-    assert daemon.roundtrip({"type": "pin_entry", "id": 1, "pin": "yes"}).msg == {
-        "type": "success"
-    }
+    assert (
+        daemon.roundtrip({"type": "pin_entry", "id": 1, "pin": "yes"}).msg_type
+        == MessageType.SUCCESS
+    )
 
     daemon.add_events(["entry_add"])
     compositor.copy("test", Selection.REGULAR, {"x": "y"})
@@ -247,16 +249,18 @@ def test_pin_toggle(compositor: Compositor, daemon_runner: Callable):
     compositor.copy("test", Selection.REGULAR, {"a": "b"})
     daemon.recv_event("entry_add")
 
-    assert daemon.roundtrip({"type": "pin_entry", "id": 1, "pin": "toggle"}).msg == {
-        "type": "success"
-    }
+    assert (
+        daemon.roundtrip({"type": "pin_entry", "id": 1, "pin": "toggle"}).msg_type
+        == MessageType.SUCCESS
+    )
 
     msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     assert msg.msg[0]["pinned"] == True
 
-    assert daemon.roundtrip({"type": "pin_entry", "id": 1, "pin": "toggle"}).msg == {
-        "type": "success"
-    }
+    assert (
+        daemon.roundtrip({"type": "pin_entry", "id": 1, "pin": "toggle"}).msg_type
+        == MessageType.SUCCESS
+    )
 
     msg = daemon.roundtrip({"type": "get_history", "start": 0, "n": 1})
     assert msg.msg[0]["pinned"] == False
@@ -278,9 +282,10 @@ def test_clear(compositor: Compositor, daemon_runner: Callable):
     assert daemon.roundtrip({"type": "get_history_length"}).msg == {"size": 2}
 
     daemon.add_events(["entry_delete"])
-    assert daemon.roundtrip({"type": "delete_entry", "id": -1}).msg == {
-        "type": "success"
-    }
+    assert (
+        daemon.roundtrip({"type": "delete_entry", "id": -1}).msg_type
+        == MessageType.SUCCESS
+    )
     daemon.recv_event("entry_delete").msg["id"] == -1
 
     assert daemon.roundtrip({"type": "get_history_length"}).msg == {"size": 0}

@@ -10,6 +10,7 @@ from conftest import Daemon
 from conftest import Selection
 from conftest import cmp_entry
 from conftest import wait_cond
+from conftest import MessageType
 
 
 def test_chunked(compositor: Compositor, daemon_runner: Callable):
@@ -55,10 +56,11 @@ def test_hold_requests(compositor: Compositor, daemon_runner: Callable):
     daemon: Daemon = daemon_runner(compositor.display, "", False)
 
     daemon.add_events(["entry_add"])
-    assert daemon.roundtrip({"type": "hold_requests", "n": 3}).msg == {
-        "type": "success"
-    }
-    
+    assert (
+        daemon.roundtrip({"type": "hold_requests", "n": 3}).msg_type
+        == MessageType.SUCCESS
+    )
+
     compositor.copy("test", Selection.REGULAR, {"a": "b"})
     msg = daemon.recv_msg()
     assert msg.msg["event"] == "entry_add"

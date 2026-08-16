@@ -178,7 +178,7 @@ read_msgs(ipc_msg_callback callback, void *udata)
 static bool
 roundtrip(struct json_object *req, struct message *msg)
 {
-    ipc_ct_write_msg(&ict, IPC_MESSAGE_CALL, req, -1);
+    ipc_ct_write_msg(&ict, IPC_MESSAGE_REQUEST, req, -1);
     while (ipc_ct_has_pending_writes(&ict))
     {
         bool need_poll = false;

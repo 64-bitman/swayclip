@@ -4,6 +4,7 @@ from conftest import Daemon
 from conftest import Selection
 from conftest import cmp_entry
 from conftest import wait_cond
+from conftest import MessageType
 
 
 def test_receive(compositor: Compositor, daemon_runner: Callable):
@@ -45,9 +46,10 @@ def test_delete(compositor: Compositor, daemon_runner: Callable):
     daemon.recv_event("entry_add")
 
     daemon.add_events(["entry_delete"])
-    assert daemon.roundtrip({"type": "delete_entry", "id": 2}).msg == {
-        "type": "success"
-    }
+    assert (
+        daemon.roundtrip({"type": "delete_entry", "id": 2}).msg_type
+        == MessageType.SUCCESS
+    )
     daemon.recv_event("entry_delete")
 
     # Clipboard should be cleared

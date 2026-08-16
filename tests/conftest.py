@@ -135,8 +135,11 @@ def compositor(tmp_path_factory) -> Generator:
 
 
 class MessageType(Enum):
-    CALL = 0
-    EVENT = 1
+    REQUEST = 0
+    RESPONSE = 1
+    SUCCESS = 2
+    ERROR = 3
+    EVENT = 4
 
 
 class IpcMessage(NamedTuple):
@@ -208,9 +211,10 @@ class Daemon:
         self.events = []
 
     def _subscribe(self):
-        assert self.roundtrip({"type": "subscribe", "events": self.events}).msg == {
-            "type": "success"
-        }
+        assert (
+            self.roundtrip({"type": "subscribe", "events": self.events}).msg_type
+            == MessageType.SUCCESS
+        )
 
     def add_events(self, events: list[str]):
         self.events.extend(events)
