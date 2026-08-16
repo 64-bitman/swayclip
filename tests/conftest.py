@@ -308,7 +308,9 @@ class Daemon:
     def close(self):
         self.sock.close()
         self.proc.terminate()
-        self.proc.wait()
+        ret: int = self.proc.wait()
+
+        assert ret == 0
 
 
 @pytest.fixture
