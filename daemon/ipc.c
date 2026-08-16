@@ -60,8 +60,10 @@ message_callback(struct ipc_message *imsg, void *udata)
             goto exit;
         if (--client->hold == 0)
         {
-            xarray_foreach(ipc_message, &client->hold_arr, imsg)
+            xarray_foreach(&client->hold_arr, i)
             {
+                imsg = xarray_ptr_ipc_message(&client->hold_arr, i);
+
                 client->ipc->callback(
                     client, imsg, client->ipc->callback_udata
                 );

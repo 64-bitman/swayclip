@@ -83,12 +83,12 @@ data_source_impl_send(
     struct data_source *source = (struct data_source *)wlr_source;
     struct mime_type   *mt = NULL;
 
-    xarray_foreach(mime_type, &source->mime_types, mt)
+    xarray_foreach(&source->mime_types, i)
     {
+        mt = xarray_ptr_mime_type(&source->mime_types, i);
         if (strcmp(mt->name, mime_type) == 0)
-            goto next;
+            break;
     }
-next:
 
     if (mt == NULL)
     {
@@ -120,10 +120,10 @@ static void
 data_source_impl_destroy(struct wlr_data_source *wlr_source)
 {
     struct data_source *source = (struct data_source *)wlr_source;
-    struct mime_type   *mt;
 
-    xarray_foreach(mime_type, &source->mime_types, mt)
+    xarray_foreach(&source->mime_types, i)
     {
+        struct mime_type *mt = xarray_ptr_mime_type(&source->mime_types, i);
         free(mt->name);
         free(mt->data);
     }
@@ -225,12 +225,12 @@ execute_command(struct json_object *obj)
 
         struct seat *seat = NULL;
 
-        xarray_foreach_val(seat, &seats, seat)
+        xarray_foreach(&seats, i)
         {
+            seat = xarray_val_seat(&seats, i);
             if (strcmp(seat->seat->name, name) == 0)
-                goto stop;
+                break;
         }
-stop:
 
         assert(seat != NULL);
         wlr_seat_destroy(seat->seat);
@@ -250,12 +250,12 @@ stop:
 
         struct seat *seat = NULL;
 
-        xarray_foreach_val(seat, &seats, seat)
+        xarray_foreach(&seats, i)
         {
+            seat = xarray_val_seat(&seats, i);
             if (strcmp(seat->seat->name, seat_name) == 0)
-                goto stop2;
+                break;
         }
-stop2:
 
         if (seat == NULL)
             return false;
@@ -448,13 +448,13 @@ stop2:
         // Check if there is an existing toplevel
         struct toplevel *tp = NULL;
 
-        xarray_foreach_val(toplevel, &toplevels, tp)
+        xarray_foreach(&toplevels, i)
         {
+            tp = xarray_val_toplevel(&toplevels, i);
             if (strcmp(tp->id, id) == 0)
-                goto stop3;
+                break;
         }
 
-stop3:
         if (strcmp(cmd, "set_toplevel") == 0)
         {
             const char *title =

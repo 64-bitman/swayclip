@@ -273,49 +273,49 @@ config_init(struct config *config, const char *file)
 void
 config_uninit(struct config *config)
 {
-    struct config_seat *config_seat;
-
-    xarray_foreach(config_seat, &config->configured_seats, config_seat)
-        free(config_seat->name);
+    xarray_foreach(&config->configured_seats, i)
+        free(xarray_ptr_config_seat(&config->configured_seats, i)->name);
     xarray_uninit_config_seat(&config->configured_seats);
 
-    struct config_toplevel *config_toplevel;
-
-    xarray_foreach(
-        config_toplevel, &config->configured_toplevels, config_toplevel
-    )
+    xarray_foreach(&config->configured_toplevels, i)
     {
-        regex_t *reg;
+        struct config_toplevel *config_toplevel =
+            xarray_ptr_config_toplevel(&config->configured_toplevels, i);
 
-        xarray_foreach(regex, &config_toplevel->titles, reg) regfree(reg);
+        xarray_foreach(&config_toplevel->titles, i)
+            regfree(xarray_ptr_regex(&config_toplevel->titles, i));
         xarray_uninit_regex(&config_toplevel->titles);
 
-        xarray_foreach(regex, &config_toplevel->app_ids, reg) regfree(reg);
+        xarray_foreach(&config_toplevel->app_ids, i)
+            regfree(xarray_ptr_regex(&config_toplevel->app_ids, i));
         xarray_uninit_regex(&config_toplevel->app_ids);
 
-        xarray_foreach(regex, &config_toplevel->allowed_mime_types, reg)
-            regfree(reg);
+        xarray_foreach(&config_toplevel->allowed_mime_types, i)
+
+            regfree(xarray_ptr_regex(&config_toplevel->allowed_mime_types, i));
         xarray_uninit_regex(&config_toplevel->allowed_mime_types);
 
-        xarray_foreach(regex, &config_toplevel->blocked_mime_types, reg)
-            regfree(reg);
+        xarray_foreach(&config_toplevel->blocked_mime_types, i)
+            regfree(xarray_ptr_regex(&config_toplevel->blocked_mime_types, i));
         xarray_uninit_regex(&config_toplevel->blocked_mime_types);
 
-        xarray_foreach(regex, &config_toplevel->transient_mime_types, reg)
-            regfree(reg);
+        xarray_foreach(&config_toplevel->transient_mime_types, i) regfree(
+            xarray_ptr_regex(&config_toplevel->transient_mime_types, i)
+        );
         xarray_uninit_regex(&config_toplevel->transient_mime_types);
     }
     xarray_uninit_config_toplevel(&config->configured_toplevels);
 
-    regex_t *reg;
-
-    xarray_foreach(regex, &config->allowed_mime_types, reg) regfree(reg);
+    xarray_foreach(&config->allowed_mime_types, i)
+        regfree(xarray_ptr_regex(&config->allowed_mime_types, i));
     xarray_uninit_regex(&config->allowed_mime_types);
 
-    xarray_foreach(regex, &config->blocked_mime_types, reg) regfree(reg);
+    xarray_foreach(&config->blocked_mime_types, i)
+        regfree(xarray_ptr_regex(&config->blocked_mime_types, i));
     xarray_uninit_regex(&config->blocked_mime_types);
 
-    xarray_foreach(regex, &config->transient_mime_types, reg) regfree(reg);
+    xarray_foreach(&config->transient_mime_types, i)
+        regfree(xarray_ptr_regex(&config->transient_mime_types, i));
     xarray_uninit_regex(&config->transient_mime_types);
 
     free(config->logfile);

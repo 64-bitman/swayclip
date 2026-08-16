@@ -203,10 +203,10 @@ selection_set(struct selection *sel)
 bool
 match_regex_array(struct xarray_regex *arr, const char *target)
 {
-    regex_t *reg;
-
-    xarray_foreach(regex, arr, reg)
+    xarray_foreach(arr, i)
     {
+        regex_t *reg = xarray_ptr_regex(arr, i);
+
         if (regexec(reg, target, 0, NULL, 0) == 0)
             return true;
     }
@@ -291,8 +291,8 @@ static const struct ext_data_control_offer_v1_listener data_offer_listener = {
 static void
 seat_clear_mime_types(struct seat *seat)
 {
-    char *mime_type;
-    xarray_foreach_val(mime_type, &seat->mime_types, mime_type) free(mime_type);
+    xarray_foreach(&seat->mime_types, i)
+        free(xarray_val_mime_type(&seat->mime_types, i));
     xarray_uninit_mime_type(&seat->mime_types);
 }
 
@@ -549,10 +549,11 @@ wayland_seat_is_configured(
         return true;
     }
 
-    struct config_seat *config_seat;
-
-    xarray_foreach(config_seat, &config->configured_seats, config_seat)
+    xarray_foreach(&config->configured_seats, i)
     {
+        struct config_seat *config_seat =
+            xarray_ptr_config_seat(&config->configured_seats, i);
+
         if (config_seat->name == NULL || strcmp(config_seat->name, name) == 0)
         {
             *regular = config_seat->regular;
@@ -731,13 +732,14 @@ ftp_event_done(
     // Check if toplevel is configured in config file now
     if (!tp->ack)
     {
-        struct config_toplevel *config_tp;
-
         tp->config = NULL;
-        xarray_foreach(
-            config_toplevel, &wayland->config->configured_toplevels, config_tp
-        )
+
+        xarray_foreach(&wayland->config->configured_toplevels, i)
         {
+            struct config_toplevel *config_tp = xarray_ptr_config_toplevel(
+                &wayland->config->configured_toplevels, i
+            );
+
             if ((xarray_len_regex(&config_tp->titles) == 0 ||
                  (tp->title != NULL &&
                   match_regex_array(&config_tp->titles, tp->title))) &&
@@ -746,11 +748,10 @@ ftp_event_done(
                   match_regex_array(&config_tp->app_ids, tp->app_id))))
             {
                 tp->config = config_tp;
-                goto stop;
+                break;
             }
         }
 
-stop:
         tp->ack = true;
         if (tp->config == NULL)
         {

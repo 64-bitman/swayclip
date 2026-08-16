@@ -108,10 +108,11 @@ ipc_ct_init(struct ipc_ct *ict, int fd)
 void
 ipc_ct_uninit(struct ipc_ct *ict)
 {
-    struct ipc_write *wr;
 
-    xarray_foreach(ipc_write, &ict->write_queue, wr)
+    xarray_foreach(&ict->write_queue, i)
     {
+        struct ipc_write *wr = xarray_ptr_ipc_write(&ict->write_queue, i);
+
         free(wr->data);
         if (wr->scm_fd != -1)
             close(wr->scm_fd);

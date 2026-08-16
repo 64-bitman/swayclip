@@ -278,11 +278,12 @@ wsignal_selection(
         }
         state->transient.n_mime_types = xarray_len_mime_type(mime_types);
 
-        char    *mime_type;
-        uint32_t i = 0;
+        uint32_t n = 0;
 
-        xarray_foreach_val(mime_type, mime_types, mime_type)
+        xarray_foreach(mime_types, i)
         {
+            char *mime_type = xarray_val_mime_type(mime_types, i);
+
             struct io_read ctx = {
                 .buf = state->buf,
                 .bufsize = sizeof(state->buf),
@@ -295,17 +296,17 @@ wsignal_selection(
                 return;
             }
 
-            state->transient.mime_types[i].name = strdup(mime_type);
-            if (state->transient.mime_types[i].name == NULL)
+            state->transient.mime_types[n].name = strdup(mime_type);
+            if (state->transient.mime_types[n].name == NULL)
             {
                 xarray_uninit_io(&ctx.data);
                 clear_transient(state);
                 return;
             }
 
-            state->transient.mime_types[i].data =
-                xarray_steal_io(&ctx.data, &state->transient.mime_types[i].sz);
-            i++;
+            state->transient.mime_types[n].data =
+                xarray_steal_io(&ctx.data, &state->transient.mime_types[n].sz);
+            n++;
         }
 
         set(state, sel, 0);
@@ -329,7 +330,6 @@ wsignal_selection(
 
     sha256_init(&sha_ctx);
 
-    char   *mime_type;
     uint8_t data_id[SHA256_BLOCK_SIZE];
 
     enum content_type ctype = CONTENT_UNKNOWN;
@@ -337,8 +337,9 @@ wsignal_selection(
 
     // Receive the contents of every mime type and add them to the database. The
     // filtering of mime types is done in wayland.c
-    xarray_foreach_val(mime_type, mime_types, mime_type)
+    xarray_foreach(mime_types, i)
     {
+        char      *mime_type = xarray_val_mime_type(mime_types, i);
         SHA256_CTX data_sha_ctx;
 
         sha256_init(&data_sha_ctx);
