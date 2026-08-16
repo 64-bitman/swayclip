@@ -27,6 +27,13 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+// Events are always emitted after a IPC request.
+struct pending_event
+{
+    struct json_object *obj;
+};
+xarray_create(struct pending_event, event, uint32_t, 2, 2);
+
 struct ipc_client
 {
     // Bitflag of events this client has subscribed to
@@ -37,6 +44,9 @@ struct ipc_client
     uint32_t                  hold;
     struct xarray_ipc_message hold_arr;
 
+    struct xarray_event pending_events;
+    bool                handling_req; // If handling request
+
     struct ipc   *ipc;
     struct ipc_ct ict;
 
@@ -45,6 +55,21 @@ struct ipc_client
 xlist_define(ipc_client, struct ipc_client, link);
 
 static void ipc_client_free(struct ipc_client *client);
+
+static void
+ipc_client_flush_events(struct ipc_client *client)
+{
+    xarray_foreach(&client->pending_events, i)
+    {
+        struct pending_event ev = xarray_val_event(&client->pending_events, i);
+
+        ipc_ct_write_msg(&client->ict, IPC_MESSAGE_EVENT, ev.obj, -1);
+        (void)eventloop_mod(
+            client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT
+        );
+    }
+    xarray_clear_event(&client->pending_events);
+}
 
 static void
 message_callback(struct ipc_message *imsg, void *udata)
@@ -64,9 +89,11 @@ message_callback(struct ipc_message *imsg, void *udata)
             {
                 imsg = xarray_ptr_ipc_message(&client->hold_arr, i);
 
+                client->handling_req = true;
                 client->ipc->callback(
                     client, imsg, client->ipc->callback_udata
                 );
+                client->handling_req = false;
                 ipc_message_clear(imsg);
             }
             xarray_clear_ipc_message(&client->hold_arr);
@@ -74,14 +101,18 @@ message_callback(struct ipc_message *imsg, void *udata)
                 client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT
             );
         }
-        return;
+        goto flush;
     }
 
+    client->handling_req = true;
     client->ipc->callback(client, imsg, client->ipc->callback_udata);
+    client->handling_req = false;
     (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
 
 exit:
     ipc_message_clear(imsg);
+flush:
+    ipc_client_flush_events(client);
 }
 
 static bool
@@ -153,6 +184,7 @@ ipc_add_client(struct ipc *ipc, int client_fd)
 
     client->ipc = ipc;
     xarray_init_ipc_message(&client->hold_arr);
+    xarray_init_event(&client->pending_events);
     xlist_insert_after_ipc_client(&ipc->connections, client);
 
     log_debug("New IPC client");
@@ -171,7 +203,11 @@ ipc_client_free(struct ipc_client *client)
     xarray_foreach(&client->hold_arr, i)
         ipc_message_clear(xarray_ptr_ipc_message(&client->hold_arr, i));
 
+    xarray_foreach(&client->pending_events, i)
+        json_object_put(xarray_ptr_event(&client->pending_events, i)->obj);
+
     xarray_uninit_ipc_message(&client->hold_arr);
+    xarray_uninit_event(&client->pending_events);
     xlist_unlink_ipc_client(client);
     free(client);
 }
@@ -309,9 +345,7 @@ ipc_uninit(struct ipc *ipc)
     struct ipc_client *client;
 
     xlist_foreach_safe(ipc_client, &ipc->connections, client)
-    {
         ipc_client_free(client);
-    }
 
     close(ipc->fd);
     close(ipc->lock_fd);
@@ -337,9 +371,15 @@ ipc_emit_event(
     {
         if (client->events & event)
         {
-            ipc_ct_write_msg(
-                &client->ict, IPC_MESSAGE_EVENT, json_object_get(msg), -1
-            );
+            if (client->handling_req)
+                xarray_add_event(
+                    &client->pending_events,
+                    (struct pending_event){.obj = json_object_get(msg)}
+                );
+            else
+                ipc_ct_write_msg(
+                    &client->ict, IPC_MESSAGE_EVENT, json_object_get(msg), -1
+                );
             (void)eventloop_mod(ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
         }
     }
@@ -490,6 +530,7 @@ ipc_client_send(struct ipc_client *client, struct json_object *msg, int scm_fd)
         return;
 
     ipc_ct_write_msg(&client->ict, IPC_MESSAGE_RESPONSE, msg, scm_fd);
+    (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
 }
 
 void
@@ -508,6 +549,7 @@ ipc_client_send_error(struct ipc_client *client, const char *desc_fmt, ...)
         build_json_object(NULL, 1, JSON_FIELD_STR("desc", buf), NULL),
         -1
     );
+    (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
 }
 
 void
@@ -516,6 +558,7 @@ ipc_client_send_success(struct ipc_client *client)
     ipc_ct_write_msg(
         &client->ict, IPC_MESSAGE_SUCCESS, build_json_object(NULL, -1, NULL), -1
     );
+    (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
 }
 
 void
@@ -527,6 +570,7 @@ ipc_client_send_success_fd(struct ipc_client *client, int scm_fd)
         build_json_object(NULL, -1, NULL),
         scm_fd
     );
+    (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
 }
 
 void

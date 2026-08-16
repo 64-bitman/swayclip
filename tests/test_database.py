@@ -30,15 +30,19 @@ def test_set_clipboard(compositor: Compositor, daemon_runner: Callable):
 
     daemon.add_events(["entry_state"])
     msg = daemon.roundtrip({"type": "set_clipboard", "id": 5})
-    # Previous set entry should have "entry_state" event too. Its sent before
-    # the success response, confusing but oh well.
+    assert msg.msg_type == MessageType.SUCCESS
+
+    msg = daemon.recv_msg()
+    assert msg.msg["event"] == "entry_state"
     assert msg.msg["id"] == 10
     assert msg.msg["state"] == False
-    pmsg = daemon.recv_event("entry_state")
-    assert pmsg.msg["id"] == 5
-    assert pmsg.msg["state"] == True
+
     msg = daemon.recv_msg()
-    assert msg.msg_type == MessageType.SUCCESS
+    assert msg.msg["event"] == "entry_state"
+    assert msg.msg["id"] == 5
+    assert msg.msg["state"] == True
+    pmsg = daemon.remove_events(["entry_state"])
+
     compositor.expect("test", Selection.REGULAR, {"a": "5"})
 
     msg = daemon.roundtrip({"type": "get_history", "start": 5, "n": 1})

@@ -74,3 +74,22 @@ def test_hold_requests(compositor: Compositor, daemon_runner: Callable):
     assert daemon.recv_msg().msg == {"size": 1}
 
     assert daemon.roundtrip({"type": "get_history_length"}).msg == {"size": 1}
+
+
+def test_events_after(compositor: Compositor, daemon_runner: Callable):
+    """Test that emitted events are always sent after a request"""
+    compositor.add_seat("test")
+
+    daemon: Daemon = daemon_runner(compositor.display, "", False)
+
+    daemon.add_events(["entry_add"])
+    compositor.copy("test", Selection.REGULAR, {"a": "b"})
+    daemon.recv_event("entry_add")
+
+    daemon.add_events(["entry_state"])
+    assert (
+        daemon.roundtrip({"type": "set_clipboard", "id": 1}).msg_type
+        == MessageType.SUCCESS
+    )
+    daemon.recv_msg().msg["id"] = 1
+    daemon.recv_msg().msg["id"] = 1
