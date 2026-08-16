@@ -97,9 +97,6 @@ message_callback(struct ipc_message *imsg, void *udata)
                 ipc_message_clear(imsg);
             }
             xarray_clear_ipc_message(&client->hold_arr);
-            (void)eventloop_mod(
-                client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT
-            );
         }
         goto flush;
     }
@@ -107,7 +104,6 @@ message_callback(struct ipc_message *imsg, void *udata)
     client->handling_req = true;
     client->ipc->callback(client, imsg, client->ipc->callback_udata);
     client->handling_req = false;
-    (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
 
 exit:
     ipc_message_clear(imsg);
