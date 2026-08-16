@@ -1017,6 +1017,6 @@ database_clear(struct database *db)
     if (ret == SQLITE_DONE)
         return true;
 
-    log_error("Error getting clearing hisotry: %s", sqlite3_errmsg(db->handle));
+    log_error("Error clearing history: %s", sqlite3_errmsg(db->handle));
     return false;
 }
