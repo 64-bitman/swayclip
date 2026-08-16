@@ -46,3 +46,29 @@ def test_bad_input(compositor: Compositor, daemon_runner: Callable):
     daemon.sock.sendall(header + data)
 
     assert daemon.recv_msg().msg == {"size": 0}
+
+
+def test_hold_requests(compositor: Compositor, daemon_runner: Callable):
+    """Tests if requests can be held so that they executed atomically"""
+    compositor.add_seat("test")
+
+    daemon: Daemon = daemon_runner(compositor.display, "", False)
+
+    daemon.add_events(["entry_add"])
+    assert daemon.roundtrip({"type": "hold_requests", "n": 3}).msg == {
+        "type": "success"
+    }
+    
+    compositor.copy("test", Selection.REGULAR, {"a": "b"})
+    msg = daemon.recv_msg()
+    assert msg.msg["event"] == "entry_add"
+
+    daemon.send_msg({"type": "get_history_length"})
+    daemon.send_msg({"type": "get_history_length"})
+    daemon.send_msg({"type": "get_history_length"})
+
+    assert daemon.recv_msg().msg == {"size": 1}
+    assert daemon.recv_msg().msg == {"size": 1}
+    assert daemon.recv_msg().msg == {"size": 1}
+
+    assert daemon.roundtrip({"type": "get_history_length"}).msg == {"size": 1}

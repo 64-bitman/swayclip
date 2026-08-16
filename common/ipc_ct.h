@@ -29,6 +29,7 @@
 #define IPC_REQ_DELETE_ENTRY "delete_entry"
 #define IPC_REQ_PIN_ENTRY "pin_entry"
 #define IPC_REQ_GET_CURRENT "get_current"
+#define IPC_REQ_HOLD_REQUESTS "hold_requests"
 
 // Make sure to update IPC request handler (for daemon)
 #define IPC_EVENT_ENTRY_ADD "entry_add"
@@ -55,6 +56,8 @@ enum ipc_message_type
 // "aux_data_len".
 struct ipc_message
 {
+    int flags;
+
     enum ipc_message_type type;
     struct json_object   *payload;
     union
@@ -67,6 +70,7 @@ struct ipc_message
         int aux_fd;
     };
 };
+xarray_create(struct ipc_message, ipc_message, uint32_t, 32, 2);
 
 struct ipc_write
 {
@@ -104,6 +108,7 @@ char *get_ipc_path(void);
 bool ipc_ct_init(struct ipc_ct *ict, int fd);
 void ipc_ct_uninit(struct ipc_ct *ict);
 bool ipc_ct_read(struct ipc_ct *ict, uint flags, ipc_msg_callback callback, void *udata);
+void ipc_message_clear(struct ipc_message *imsg);
 bool ipc_ct_write(struct ipc_ct *ict, bool *need_poll);
 bool ipc_ct_has_pending_writes(struct ipc_ct *ict);
 void ipc_ct_write_msg(struct ipc_ct *ict, enum ipc_message_type type, struct json_object *msg, int scm_fd);

@@ -191,7 +191,7 @@ ipc_ct_read(
         if (j_err == json_tokener_success)
         {
             struct ipc_message imsg = {
-                .type = ict->pending_type, .payload = msg
+                .flags = flags, .type = ict->pending_type, .payload = msg
             };
             int scm_fd = ict->scm_fd;
 
@@ -235,20 +235,8 @@ ipc_ct_read(
 
             callback(&imsg, udata);
 
-            if (!(flags & IPC_CT_TAKE_OWNERSHIP))
-            {
-                json_object_put(msg);
-                if (flags & IPC_CT_NO_MMAP)
-                {
-                    if (imsg.aux_fd != -1)
-                        close(imsg.aux_fd);
-                }
-                else
-                {
-                    if (imsg.aux_data != NULL)
-                        munmap(imsg.aux_data, imsg.aux_data_len);
-                }
-            }
+            if (!(imsg.flags & IPC_CT_TAKE_OWNERSHIP))
+                ipc_message_clear(&imsg);
         }
         else if (j_err == json_tokener_continue)
             continue;
@@ -264,6 +252,22 @@ ipc_ct_read(
     }
 
     return true;
+}
+
+void
+ipc_message_clear(struct ipc_message *imsg)
+{
+    json_object_put(imsg->payload);
+    if (imsg->flags & IPC_CT_NO_MMAP)
+    {
+        if (imsg->aux_fd != -1)
+            close(imsg->aux_fd);
+    }
+    else
+    {
+        if (imsg->aux_data != NULL)
+            munmap(imsg->aux_data, imsg->aux_data_len);
+    }
 }
 
 /*

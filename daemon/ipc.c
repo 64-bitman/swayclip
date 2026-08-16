@@ -21,6 +21,7 @@
 #include "common/ipc_ct.h"
 #include "common/json_util.h"
 #include "common/log.h"
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -30,6 +31,11 @@ struct ipc_client
 {
     // Bitflag of events this client has subscribed to
     uint events;
+
+    // Number of requests to hold before executing all of them at once. zero
+    // means execute immediately
+    uint32_t                  hold;
+    struct xarray_ipc_message hold_arr;
 
     struct ipc   *ipc;
     struct ipc_ct ict;
@@ -41,15 +47,39 @@ xlist_define(ipc_client, struct ipc_client, link);
 static void ipc_client_free(struct ipc_client *client);
 
 static void
-message_callback(struct ipc_message *msg, void *udata)
+message_callback(struct ipc_message *imsg, void *udata)
 {
     struct ipc_client *client = udata;
 
-    if (msg->type != IPC_MESSAGE_CALL)
-        return;
+    if (imsg->type != IPC_MESSAGE_CALL)
+        goto exit;
 
-    client->ipc->callback(client, msg, client->ipc->callback_udata);
+    if (client->hold > 0)
+    {
+        if (!xarray_add_ipc_message(&client->hold_arr, *imsg))
+            goto exit;
+        if (--client->hold == 0)
+        {
+            xarray_foreach(ipc_message, &client->hold_arr, imsg)
+            {
+                client->ipc->callback(
+                    client, imsg, client->ipc->callback_udata
+                );
+                ipc_message_clear(imsg);
+            }
+            xarray_clear_ipc_message(&client->hold_arr);
+            (void)eventloop_mod(
+                client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT
+            );
+        }
+        return;
+    }
+
+    client->ipc->callback(client, imsg, client->ipc->callback_udata);
     (void)eventloop_mod(client->ipc->loop, client->ict.fd, EPOLLIN | EPOLLOUT);
+
+exit:
+    ipc_message_clear(imsg);
 }
 
 static bool
@@ -63,7 +93,9 @@ client_callback(int fd, int events, void *udata)
     bool ret = true;
 
     if (events & EPOLLIN)
-        ret = ipc_ct_read(&client->ict, 0, message_callback, client);
+        ret = ipc_ct_read(
+            &client->ict, IPC_CT_TAKE_OWNERSHIP, message_callback, client
+        );
     if (ret && events & EPOLLOUT)
     {
         bool poll = false;
@@ -118,6 +150,7 @@ ipc_add_client(struct ipc *ipc, int client_fd)
     }
 
     client->ipc = ipc;
+    xarray_init_ipc_message(&client->hold_arr);
     xlist_insert_after_ipc_client(&ipc->connections, client);
 
     log_debug("New IPC client");
@@ -133,6 +166,7 @@ ipc_client_free(struct ipc_client *client)
 
     log_debug("IPC client closed");
 
+    xarray_uninit_ipc_message(&client->hold_arr);
     xlist_unlink_ipc_client(client);
     free(client);
 }
@@ -399,7 +433,9 @@ ipc_event_entry_update(
 }
 
 void
-ipc_event_entry_move(struct ipc *ipc, int64_t entry_id, int64_t old_pos, int64_t new_pos)
+ipc_event_entry_move(
+    struct ipc *ipc, int64_t entry_id, int64_t old_pos, int64_t new_pos
+)
 {
     if (!ipc_event_subscribed(ipc, IPC_EVENT_FLAG_ENTRY_MOVE))
         return;
@@ -501,4 +537,10 @@ void
 ipc_client_set_events(struct ipc_client *client, uint events)
 {
     client->events = events;
+}
+
+void
+ipc_client_add_hold(struct ipc_client *client, uint32_t n)
+{
+    client->hold += n;
 }

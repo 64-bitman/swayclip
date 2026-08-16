@@ -62,4 +62,5 @@ void ipc_client_send_error(struct ipc_client *client, const char *desc_fmt, ...)
 void ipc_client_send_success(struct ipc_client *client);
 void ipc_client_send_success_fd(struct ipc_client *client, int scm_fd);
 void ipc_client_set_events(struct ipc_client *client, uint events);
+void ipc_client_add_hold(struct ipc_client *client, uint32_t n);
 // clang-format on

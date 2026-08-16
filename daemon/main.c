@@ -1088,6 +1088,27 @@ request_callback(
     {
         ipc_client_send(client, json_object_new_int64(state->id), -1);
     }
+    else if (strcmp(type, IPC_REQ_HOLD_REQUESTS) == 0)
+    {
+        int64_t n;
+
+        if (!extract_json_object(req->payload, JSON_EXTRACT_INT("n", &n), NULL))
+        {
+            ipc_client_send_error(client, IPC_INVALID_ARGS);
+            return;
+        }
+
+        if (n > UINT32_MAX)
+        {
+            ipc_client_send_error(
+                client, "number of requests to hold exceeds UINT32_MAX"
+            );
+            return;
+        }
+
+        ipc_client_add_hold(client, n);
+        ipc_client_send_success(client);
+    }
     else
         ipc_client_send_error(client, IPC_INVALID_ARGS);
 }
