@@ -1069,6 +1069,13 @@ command_events(int argc, char **argv)
     if (!init_ipc(&ict))
         return false;
 
+    if (argv[optind] == NULL)
+    {
+        // No events given
+        log_error("No events given");
+        return false;
+    }
+
     struct json_object *arr = json_object_new_array();
 
     CHECK(arr != NULL);
