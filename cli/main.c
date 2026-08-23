@@ -116,7 +116,8 @@ init_ipc(struct ipc_ct *ict)
 
 struct message
 {
-    struct json_object *obj;
+    enum ipc_message_type type;
+    struct json_object   *obj;
 
     uint8_t *aux_data;
     size_t   aux_data_len;
@@ -135,6 +136,7 @@ message_callback(struct ipc_message *imsg, void *udata)
     struct message *msg = udata;
 
     // TODO: maybe don't copy the auxillary data every time?
+    msg->type = imsg->type;
     msg->obj = json_object_get(imsg->payload);
     msg->aux_data = malloc(imsg->aux_data_len);
     if (msg->aux_data != NULL)
@@ -312,23 +314,18 @@ text_escape(const char *str, size_t len)
  * Return true is JSON response is success
  */
 bool
-is_success(struct json_object *resp)
+is_success(struct message *imsg)
 {
-    struct json_object *j_success;
-
-    json_object_object_get_ex(resp, "type", &j_success);
-    CHECK(json_object_is_type(j_success, json_type_string));
-
-    if (strcmp(json_object_get_string(j_success), "error") == 0)
+    if (imsg->type == IPC_MESSAGE_ERROR)
     {
         const char *desc;
 
-        CHECK(extract_json_object(resp, JSON_EXTRACT_STR("desc", &desc), NULL));
+        CHECK(extract_json_object(imsg->obj, JSON_EXTRACT_STR("desc", &desc), NULL));
         log_error("IPC error: %s", desc);
 
         return false;
     }
-    return strcmp(json_object_get_string(j_success), "success") == 0;
+    return imsg->type == IPC_MESSAGE_SUCCESS;
 }
 
 /*
@@ -721,7 +718,7 @@ command_set(int argc, char **argv)
         &resp
     ));
 
-    bool success = is_success(resp.obj);
+    bool success = is_success(&resp);
 
     message_clear(&resp);
 
@@ -788,7 +785,7 @@ command_get(int argc, char **argv)
         &resp
     ));
 
-    bool success = is_success(resp.obj);
+    bool success = is_success(&resp);
 
     // Not sure if aux_data can be NULL...
     if (resp.aux_data != NULL)
@@ -872,7 +869,7 @@ command_delete(int argc, char **argv)
         &resp
     ));
 
-    bool success = is_success(resp.obj);
+    bool success = is_success(&resp);
 
     message_clear(&resp);
 
@@ -962,7 +959,7 @@ command_pin(int argc, char **argv)
         &resp
     ));
 
-    bool success = is_success(resp.obj);
+    bool success = is_success(&resp);
 
     message_clear(&resp);
 
@@ -1092,7 +1089,7 @@ command_events(int argc, char **argv)
         &resp
     ));
 
-    bool success = is_success(resp.obj);
+    bool success = is_success(&resp);
 
     message_clear(&resp);
 
